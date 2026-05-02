@@ -27,3 +27,5 @@ dist-ssr
 cache
 dist-frontend
 bun.lock
+
+telegram_drive.sqlite
