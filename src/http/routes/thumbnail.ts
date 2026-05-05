@@ -1,55 +1,63 @@
-import { Router } from 'express';
-import { Api } from 'telegram';
-import { ApiError } from '../errors.js';
-import { getTelegramClient } from '../../services/telegram.js';
+import { Elysia, t } from "elysia";
+import { Api } from "telegram";
+import { ApiError } from "../errors.js";
+import { getTelegramClient } from "../../services/telegram.js";
 
-export const thumbnailRouter = Router();
+export const thumbnailRouter = new Elysia({ prefix: "/thumbnail" })
+  .derive(({ headers, query }) => {
+    const sessionId = (headers["x-session-id"] as string) || (query.session_id as string);
+    return { 
+      sessionId,
+      hasSession: !!sessionId 
+    };
+  })
+  .onBeforeHandle(({ hasSession, set }) => {
+    if (!hasSession) {
+      set.status = 401;
+      return {
+        error: { message: "Unauthorized: missing session ID" },
+      };
+    }
+  })
+  .get("/", async ({ query: { message_id, folder_id }, sessionId, set }) => {
+    const mId = typeof message_id === 'string' ? parseInt(message_id, 10) : message_id;
+    const fId = folder_id ? (typeof folder_id === 'string' ? parseInt(folder_id, 10) : folder_id) : null;
 
-thumbnailRouter.use((req, res, next) => {
-  const sessionId = (req.headers['x-session-id'] as string) || (req.query.session_id as string);
-  if (!sessionId) {
-    return next(new ApiError(401, 'Unauthorized: missing session ID'));
-  }
-  (req as any).sessionId = sessionId;
-  next();
-});
+    if (!mId) throw new ApiError(400, "message_id is required");
 
-thumbnailRouter.get('/', async (req, res, next) => {
-  try {
-    const sessionId = (req as any).sessionId;
+    const client = await getTelegramClient(sessionId!);
+    const peer = fId
+      ? await client.getInputEntity(fId)
+      : await client.getInputEntity("me");
 
-    const messageId = req.query.message_id ? parseInt(req.query.message_id as string, 10) : null;
-    const folderId = req.query.folder_id ? parseInt(req.query.folder_id as string, 10) : null;
-
-    if (!messageId) throw new ApiError(400, 'message_id is required');
-
-    const client = await getTelegramClient(sessionId);
-    const peer = folderId
-      ? await client.getInputEntity(folderId)
-      : await client.getInputEntity('me');
-
-    const messages = await client.getMessages(peer, { ids: messageId });
-    if (!messages || messages.length === 0) throw new ApiError(404, 'Message not found');
+    const messages = (await client.getMessages(peer, {
+      ids: [mId],
+    })) as Api.Message[];
+    if (!messages || messages.length === 0) {
+      throw new ApiError(404, "Message not found");
+    }
 
     const msg = messages[0];
-    if (!msg.media) throw new ApiError(404, 'Message has no media');
+    if (!msg.media) throw new ApiError(404, "Message has no media");
 
-    // Determine thumbnail type based on media kind
-    let thumbSize: string | undefined;
-    let fileReference: Buffer | undefined;
     let location: Api.TypeInputFileLocation | undefined;
-    let mimeType = 'image/jpeg';
+    let mimeType = "image/jpeg";
 
     if (msg.media instanceof Api.MessageMediaPhoto) {
       const photo = msg.media.photo as Api.Photo;
-      // Pick the smallest size for thumbnail
-      const sizes = photo.sizes as Array<Api.PhotoSize | Api.PhotoCachedSize | Api.PhotoSizeEmpty | Api.PhotoStrippedSize>;
-      const small = sizes.find(s => s instanceof Api.PhotoSize && s.type === 's')
-        || sizes.find(s => s instanceof Api.PhotoSize && s.type === 'm')
-        || sizes.find(s => s instanceof Api.PhotoSize);
+      const sizes = photo.sizes as Array<
+        | Api.PhotoSize
+        | Api.PhotoCachedSize
+        | Api.PhotoSizeEmpty
+        | Api.PhotoStrippedSize
+      >;
+      const small =
+        sizes.find((s) => s instanceof Api.PhotoSize && s.type === "s") ||
+        sizes.find((s) => s instanceof Api.PhotoSize && s.type === "m") ||
+        sizes.find((s) => s instanceof Api.PhotoSize);
 
       if (!small || !(small instanceof Api.PhotoSize)) {
-        throw new ApiError(404, 'No thumbnail available');
+        throw new ApiError(404, "No thumbnail available");
       }
 
       location = new Api.InputPhotoFileLocation({
@@ -60,15 +68,14 @@ thumbnailRouter.get('/', async (req, res, next) => {
       });
     } else if (msg.media instanceof Api.MessageMediaDocument) {
       const doc = msg.media.document as Api.Document;
-
-      // Check if it has a VideoSize or PhotoSize thumbnail
       const thumbSizes = doc.thumbs ?? [];
-      const thumb = thumbSizes.find(s => s instanceof Api.PhotoSize && s.type === 's')
-        || thumbSizes.find(s => s instanceof Api.PhotoSize && s.type === 'm')
-        || thumbSizes.find(s => s instanceof Api.PhotoSize);
+      const thumb =
+        thumbSizes.find((s) => s instanceof Api.PhotoSize && s.type === "s") ||
+        thumbSizes.find((s) => s instanceof Api.PhotoSize && s.type === "m") ||
+        thumbSizes.find((s) => s instanceof Api.PhotoSize);
 
       if (!thumb || !(thumb instanceof Api.PhotoSize)) {
-        throw new ApiError(404, 'No thumbnail available for this document');
+        throw new ApiError(404, "No thumbnail available for this document");
       }
 
       location = new Api.InputDocumentFileLocation({
@@ -78,10 +85,9 @@ thumbnailRouter.get('/', async (req, res, next) => {
         thumbSize: thumb.type,
       });
     } else {
-      throw new ApiError(400, 'Media type does not support thumbnails');
+      throw new ApiError(400, "Media type does not support thumbnails");
     }
 
-    // Collect thumbnail chunks via iterDownload
     const chunks: Buffer[] = [];
     const stream = client.iterDownload({
       file: location!,
@@ -93,12 +99,21 @@ thumbnailRouter.get('/', async (req, res, next) => {
     }
 
     const buffer = Buffer.concat(chunks);
-    if (!buffer.length) throw new ApiError(500, 'Failed to download thumbnail');
+    if (!buffer.length) {
+      throw new ApiError(500, "Failed to download thumbnail");
+    }
 
-    res.setHeader('Content-Type', mimeType);
-    res.setHeader('Cache-Control', 'public, max-age=86400');
-    res.end(buffer);
-  } catch (err) {
-    next(err);
-  }
-});
+    set.headers["Content-Type"] = mimeType;
+    set.headers["Cache-Control"] = "public, max-age=86400";
+    return buffer;
+  }, {
+    query: t.Object({
+      message_id: t.Union([t.Number(), t.String()]),
+      folder_id: t.Optional(t.Union([t.Number(), t.String()])),
+      session_id: t.Optional(t.String()),
+    }),
+    detail: {
+      summary: "Get media thumbnail",
+      tags: ["Files"],
+    }
+  });

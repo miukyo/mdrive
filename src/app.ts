@@ -1,11 +1,10 @@
-import express from "express";
-import cors from "cors";
-import { apiReference } from "@scalar/express-api-reference";
+import { Elysia } from "elysia";
+import { cors } from "@elysiajs/cors";
+import { staticPlugin } from "@elysiajs/static";
+import { swagger } from "@elysiajs/swagger";
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { config } from "./config.js";
-import { errorHandler } from "./http/errors.js";
 import { authRouter } from "./http/routes/auth.js";
 import { foldersRouter } from "./http/routes/folders.js";
 import { filesRouter } from "./http/routes/files.js";
@@ -15,42 +14,63 @@ import { shareRouter } from "./http/routes/share.js";
 import { transfersRouter } from "./http/routes/transfers.js";
 import { thumbnailRouter } from "./http/routes/thumbnail.js";
 
-export const app = express();
+export const app = new Elysia()
+  .use(cors({ origin: config.CORS_ORIGIN }))
+  .use(
+    swagger({
+      path: "/docs",
+      provider: "scalar",
+      documentation: {
+        info: {
+          title: "Telegram Drive API",
+          version: "2.0.0",
+          description: "High-performance Telegram-based cloud storage API built with Elysia and Bun.",
+        },
+        tags: [
+          { name: "Auth", description: "Authentication and session management" },
+          { name: "Folders", description: "Folder creation and management" },
+          { name: "Files", description: "File upload, download, and management" },
+          { name: "Stream", description: "Media streaming with range support" },
+          { name: "Index", description: "Search and storage statistics" },
+          { name: "Share", description: "Public sharing and ZIP generation" },
+          { name: "Transfers", description: "Real-time progress monitoring (SSE)" },
+        ],
+      },
+    }),
+  )
+  .group("/api", (app) =>
+    app
+      .use(authRouter)
+      .use(foldersRouter)
+      .use(filesRouter)
+      .use(streamRouter)
+      .use(indexingRouter)
+      .use(shareRouter)
+      .use(transfersRouter)
+      .use(thumbnailRouter),
+  )
+  .get("/health", () => ({ status: "ok" }))
+  .use(staticPlugin({ assets: "dist-frontend", prefix: "/" }))
+  .onError(({ code, error, set }) => {
+    console.error(`Error [${code}]:`, error);
+    
+    // Safely extract status code and message
+    const isError = error instanceof Error;
+    const statusCode = isError && "statusCode" in error ? (error as any).statusCode : 500;
+    const message = isError ? error.message : (error as any)?.message || "Internal Server Error";
 
-app.use(cors({ origin: config.CORS_ORIGIN }));
-app.use(express.json());
-
-const openapiPath = path.join(process.cwd(), "src", "openapi.json");
-
-app.use(
-  "/docs",
-  apiReference({
-    theme: "default",
-    content: fs.readFileSync(openapiPath, "utf-8"),
-  }),
-);
-
-// Routes will be mounted here
-app.use("/api/auth", authRouter);
-app.use("/api/folders", foldersRouter);
-app.use("/api/files", filesRouter);
-app.use("/api/stream", streamRouter);
-app.use("/api/index", indexingRouter);
-app.use("/api/share", shareRouter);
-app.use("/api/transfers", transfersRouter);
-app.use("/api/thumbnail", thumbnailRouter);
-
-app.get("/health", (req, res) => {
-  res.json({ status: "ok" });
-});
-
-app.use(errorHandler);
-
-// Serve static files from the frontend build
-const distPath = path.join(process.cwd(), "dist-frontend");
-app.use(express.static(distPath));
-
-// Fallback for SPA routing: serve index.html for any other request
-app.use((req, res) => {
-  res.sendFile(path.join(distPath, "index.html"));
-});
+    set.status = statusCode;
+    return {
+      error: {
+        message,
+      },
+    };
+  })
+  // Fallback for SPA routing
+  .get("*", async () => {
+    const file = Bun.file(path.join(process.cwd(), "dist-frontend", "index.html"));
+    if (await file.exists()) {
+      return new Response(file);
+    }
+    return new Response("Not Found", { status: 404 });
+  });

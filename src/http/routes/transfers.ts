@@ -1,27 +1,70 @@
-import { Router } from 'express';
-import { addProgressClient, removeProgressClient } from '../../services/progress.js';
-import { ApiError } from '../errors.js';
+import { Elysia, t } from "elysia";
+import {
+  addProgressClient,
+  removeProgressClient,
+  ProgressClient,
+} from "../../services/progress.js";
+import { ApiError } from "../errors.js";
 
-export const transfersRouter = Router();
+export const transfersRouter = new Elysia({ prefix: "/transfers" })
+  .derive(({ headers, query }) => {
+    const sessionId = (headers["x-session-id"] as string) || (query.session_id as string);
+    return { 
+      sessionId,
+      hasSession: !!sessionId 
+    };
+  })
+  .onBeforeHandle(({ hasSession, set }) => {
+    if (!hasSession) {
+      set.status = 401;
+      return {
+        error: { message: "Unauthorized: missing session ID" },
+      };
+    }
+  })
+  .get("/events", ({ sessionId, set }) => {
+    set.headers["Content-Type"] = "text/event-stream";
+    set.headers["Cache-Control"] = "no-cache";
+    set.headers["Connection"] = "keep-alive";
 
-transfersRouter.use((req, res, next) => {
-  const sessionId = (req.headers['x-session-id'] as string) || (req.query.session_id as string);
-  if (!sessionId) {
-    return next(new ApiError(401, 'Unauthorized: missing session ID'));
-  }
-  (req as any).sessionId = sessionId;
-  next();
-});
+    const stream = new ReadableStream({
+      start(controller) {
+        const client: ProgressClient = {
+          write: (data: string) => {
+            try {
+              controller.enqueue(new TextEncoder().encode(data));
+            } catch (e) {
+              // Ignore if controller is closed
+            }
+          },
+        };
 
-transfersRouter.get('/events', (req, res, next) => {
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
+        addProgressClient(sessionId!, client);
 
-  const sid = (req as any).sessionId;
-  addProgressClient(sid, res);
+        // Keep-alive heartbeat
+        const interval = setInterval(() => {
+          client.write(": keep-alive\n\n");
+        }, 30000);
 
-  req.on('close', () => {
-    removeProgressClient(sid, res);
+        return () => {
+          clearInterval(interval);
+          removeProgressClient(sessionId!, client);
+        };
+      },
+      cancel() {
+        // Handled by return in start if using standard stream, 
+        // but Elysia might need it here.
+      }
+    });
+
+    return new Response(stream, { headers: set.headers as any });
+  }, {
+    query: t.Object({
+      session_id: t.Optional(t.String({ description: "Session ID (alternative to header)" })),
+    }),
+    detail: {
+      summary: "Subscribe to transfer progress (SSE)",
+      description: "Server-Sent Events endpoint for real-time progress updates on uploads and other background tasks.",
+      tags: ["Transfers"],
+    }
   });
-});

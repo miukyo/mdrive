@@ -148,6 +148,24 @@ export const searchFiles = async (
   }));
 };
 
+export const getFileFolders = async (
+  phone: string,
+  messageIds: number[],
+): Promise<{ message_id: number; folder_id: number | null }[]> => {
+  if (messageIds.length === 0) return [];
+  const placeholders = messageIds.map(() => "?").join(",");
+  const rows = sqlite
+    .query(
+      `SELECT message_id, folder_id FROM telegram_index_files WHERE phone = ? AND message_id IN (${placeholders})`,
+    )
+    .all(phone, ...messageIds) as any[];
+
+  return rows.map((r) => ({
+    message_id: r.message_id,
+    folder_id: r.folder_id === 0 ? null : r.folder_id,
+  }));
+};
+
 export const getStorageStats = async (phone: string) => {
   const rows = sqlite.query(
     `SELECT 
