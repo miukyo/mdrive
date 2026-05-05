@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { ApiError } from '../errors.js';
-import { createFolder, deleteFolder, scanFolders } from '../../services/drive.js';
+import { createFolder, deleteFolder } from '../../services/drive.js';
+import { getFolders } from '../../repositories/index.js';
+import { getSession } from '../../repositories/sessions.js';
 
 export const foldersRouter = Router();
 
@@ -16,7 +18,11 @@ foldersRouter.use((req, res, next) => {
 
 foldersRouter.get('/', async (req, res, next) => {
   try {
-    const folders = await scanFolders((req as any).sessionId);
+    const sessionId = (req as any).sessionId;
+    const session = await getSession(sessionId);
+    if (!session) throw new ApiError(401, 'Session not found');
+
+    const folders = await getFolders(session.phone);
     res.json({ data: folders });
   } catch (err) {
     next(err);

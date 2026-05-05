@@ -817,19 +817,11 @@
         "summary": "Stream a media file",
         "parameters": [
           {
-            "in": "header",
-            "name": "x-session-id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
             "in": "query",
             "name": "message_id",
             "required": true,
             "schema": {
-              "type": "number"
+              "type": "integer"
             }
           },
           {
@@ -837,8 +829,36 @@
             "name": "folder_id",
             "required": false,
             "schema": {
-              "type": "number"
+              "type": "integer"
             }
+          },
+          {
+            "in": "query",
+            "name": "download",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["0", "1"]
+            },
+            "description": "If '1', triggers a file download by setting Content-Disposition header"
+          },
+          {
+            "in": "query",
+            "name": "session_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Alternative way to provide session ID for direct links"
+          },
+          {
+            "in": "query",
+            "name": "share_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Public share token to authenticate streaming without exposing a session ID"
           }
         ],
         "responses": {
@@ -1283,7 +1303,8 @@
         "tags": [
           "Sharing"
         ],
-        "summary": "Download a file or folder from a share link",
+        "summary": "Get metadata for a shared file or folder",
+        "description": "Returns JSON information about the share, including file details and owner status.",
         "parameters": [
           {
             "in": "path",
@@ -1296,15 +1317,49 @@
         ],
         "responses": {
           "200": {
-            "description": "File or ZIP stream",
+            "description": "Share metadata",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "token": { "type": "string" },
+                    "share_type": { "type": "string" },
+                    "owner_phone": { "type": "string" },
+                    "created_at": { "type": "string" },
+                    "is_owner_online": { "type": "boolean" },
+                    "file": { "type": "object", "nullable": true },
+                    "folder": { "type": "object", "nullable": true },
+                    "file_count": { "type": "number", "nullable": true }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/share/{token}/zip": {
+      "get": {
+        "tags": [
+          "Sharing"
+        ],
+        "summary": "Download shared folder as a ZIP file",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ZIP file stream",
             "content": {
               "application/zip": {
-                "schema": {
-                  "type": "string",
-                  "format": "binary"
-                }
-              },
-              "application/octet-stream": {
                 "schema": {
                   "type": "string",
                   "format": "binary"

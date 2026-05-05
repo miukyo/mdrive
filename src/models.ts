@@ -7,6 +7,9 @@ export interface FileMetadata {
   file_ext: string | null;
   created_at: string;
   icon_type: string;
+  chunk_id?: string;
+  chunk_index?: number;
+  total_chunks?: number;
 }
 
 export interface FolderMetadata {

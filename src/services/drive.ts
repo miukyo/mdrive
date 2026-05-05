@@ -1,6 +1,8 @@
 import { Api } from 'telegram';
-import { getTelegramClient } from './telegram.js';
+import { getTelegramClient, invokeQueued } from './telegram.js';
 import { FileMetadata, FolderMetadata } from '../models.js';
+import { deleteFolderIndex, saveFolderIndex } from '../repositories/index.js';
+import { getSession } from '../repositories/sessions.js';
 import path from 'node:path';
 
 const resolvePeer = async (client: any, folderId: number | null) => {
@@ -18,7 +20,8 @@ export const createFolder = async (sessionId: string, name: string, parentId: nu
     ? `Telegram Drive Storage Folder\n[telegram-drive-folder]\n[parent:${parentId}]`
     : `Telegram Drive Storage Folder\n[telegram-drive-folder]`;
 
-  const result = await client.invoke(
+  const result = await invokeQueued(
+    sessionId,
     new Api.channels.CreateChannel({
       title,
       about,
@@ -43,12 +46,32 @@ export const createFolder = async (sessionId: string, name: string, parentId: nu
   }
 
   // Explicitly Disable TTL
-  await client.invoke(
-    new Api.messages.SetHistoryTTL({
-      peer: new Api.InputPeerChannel({ channelId: chatId as any, accessHash: accessHash! }),
-      period: 0,
-    })
-  );
+  try {
+    await invokeQueued(
+      sessionId,
+      new Api.messages.SetHistoryTTL({
+        peer: new Api.InputPeerChannel({
+          channelId: chatId as any,
+          accessHash: accessHash!,
+        }),
+        period: 0,
+      }),
+    );
+  } catch (err: any) {
+    // Ignore CHAT_NOT_MODIFIED error
+    if (!err.errorMessage?.includes("CHAT_NOT_MODIFIED")) {
+      console.error("Failed to set TTL:", err);
+    }
+  }
+
+  const session = await getSession(sessionId);
+  if (session) {
+    await saveFolderIndex(session.phone, {
+      id: chatId,
+      name,
+      parent_id: parentId,
+    });
+  }
 
   return {
     id: chatId,
@@ -61,11 +84,18 @@ export const deleteFolder = async (sessionId: string, folderId: number) => {
   const client = await getTelegramClient(sessionId);
   const peer = await resolvePeer(client, folderId);
 
-  await client.invoke(
+  await invokeQueued(
+    sessionId,
     new Api.channels.DeleteChannel({
       channel: peer,
     })
   );
+
+  const session = await getSession(sessionId);
+  if (session) {
+    await deleteFolderIndex(session.phone, folderId);
+  }
+
   return true;
 };
 
@@ -93,7 +123,8 @@ export const scanFolders = async (sessionId: string): Promise<FolderMetadata[]> 
       }
 
       try {
-        const fullChat = await client.invoke(
+        const fullChat = await invokeQueued(
+          sessionId,
           new Api.channels.GetFullChannel({
             channel: await client.getInputEntity(entity),
           })
@@ -117,10 +148,25 @@ export const scanFolders = async (sessionId: string): Promise<FolderMetadata[]> 
   return folders;
 };
 
-export const getFiles = async (sessionId: string, folderId: number | null): Promise<FileMetadata[]> => {
+export const extractMetadata = (text: string) => {
+  const match = text.match(/\[TD_META\](.*)\[\/TD_META\]/);
+  if (match) {
+    try {
+      return JSON.parse(match[1]);
+    } catch (e) {
+      return null;
+    }
+  }
+  return null;
+};
+
+export const getFiles = async (
+  sessionId: string,
+  folderId: number | null,
+): Promise<FileMetadata[]> => {
   const client = await getTelegramClient(sessionId);
   const files: FileMetadata[] = [];
-  
+
   const peer = await resolvePeer(client, folderId);
   const messages = await client.getMessages(peer, { limit: 1000 });
 
@@ -128,14 +174,22 @@ export const getFiles = async (sessionId: string, folderId: number | null): Prom
     if (msg.media && msg.media instanceof Api.MessageMediaDocument) {
       const doc = msg.media.document;
       if (doc instanceof Api.Document) {
-        let name = 'Unknown';
-        for (const attr of doc.attributes) {
-          if (attr instanceof Api.DocumentAttributeFilename) {
-            name = attr.fileName;
+        let name = msg.message || "";
+        const meta = extractMetadata(name);
+
+        if (meta) {
+          name = meta.n || name;
+        } else if (!name) {
+          for (const attr of doc.attributes) {
+            if (attr instanceof Api.DocumentAttributeFilename) {
+              name = attr.fileName;
+            }
           }
         }
-        
-        const size = Number(doc.size);
+
+        if (!name) name = "Unknown";
+
+        const size = meta?.s || Number(doc.size);
         const mime = doc.mimeType;
         const ext = path.extname(name).slice(1) || null;
 
@@ -147,20 +201,23 @@ export const getFiles = async (sessionId: string, folderId: number | null): Prom
           mime_type: mime,
           file_ext: ext,
           created_at: new Date(msg.date * 1000).toISOString(),
-          icon_type: 'file',
+          icon_type: "file",
+          chunk_id: meta?.cid,
+          chunk_index: meta?.idx,
+          total_chunks: meta?.tot,
         });
       }
     } else if (msg.media && msg.media instanceof Api.MessageMediaPhoto) {
-       files.push({
-          id: msg.id,
-          folder_id: folderId,
-          name: 'Photo.jpg',
-          size: 0,
-          mime_type: 'image/jpeg',
-          file_ext: 'jpg',
-          created_at: new Date(msg.date * 1000).toISOString(),
-          icon_type: 'file',
-       });
+      files.push({
+        id: msg.id,
+        folder_id: folderId,
+        name: msg.message || "Photo.jpg",
+        size: 0,
+        mime_type: "image/jpeg",
+        file_ext: "jpg",
+        created_at: new Date(msg.date * 1000).toISOString(),
+        icon_type: "file",
+      });
     }
   }
 
@@ -187,5 +244,34 @@ export const moveFiles = async (sessionId: string, messageIds: number[], sourceF
   });
 
   await client.deleteMessages(sourcePeer, messageIds, { revoke: true });
+  return true;
+};
+
+export const renameFile = async (
+  sessionId: string,
+  folderId: number | null,
+  messageId: number,
+  newName: string,
+) => {
+  const client = await getTelegramClient(sessionId);
+  const peer = await resolvePeer(client, folderId);
+
+  // Fetch message to preserve metadata if exists
+  const [msg] = await client.getMessages(peer, { ids: [messageId] });
+  let text = newName;
+
+  if (msg && msg.message) {
+    const meta = extractMetadata(msg.message);
+    if (meta) {
+      meta.n = newName;
+      text = `${newName} [TD_META]${JSON.stringify(meta)}[/TD_META]`;
+    }
+  }
+
+  await invokeQueued(sessionId, new Api.messages.EditMessage({
+    peer,
+    id: messageId,
+    message: text,
+  }));
   return true;
 };

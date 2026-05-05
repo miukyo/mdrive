@@ -34,6 +34,9 @@ CREATE TABLE IF NOT EXISTS telegram_index_files (
   file_ext TEXT,
   created_at DATETIME,
   icon_type TEXT NOT NULL DEFAULT 'file',
+  chunk_id TEXT,
+  chunk_index INTEGER,
+  total_chunks INTEGER,
   indexed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (phone, folder_id, message_id)
 );
@@ -47,5 +50,6 @@ CREATE TABLE IF NOT EXISTS telegram_share_links (
   share_type TEXT NOT NULL,
   folder_id INTEGER,
   message_id INTEGER,
+  is_active INTEGER NOT NULL DEFAULT 1,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

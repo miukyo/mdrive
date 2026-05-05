@@ -6,9 +6,9 @@ import { getTelegramClient } from '../../services/telegram.js';
 export const thumbnailRouter = Router();
 
 thumbnailRouter.use((req, res, next) => {
-  const sessionId = req.headers['x-session-id'] as string;
+  const sessionId = (req.headers['x-session-id'] as string) || (req.query.session_id as string);
   if (!sessionId) {
-    return next(new ApiError(401, 'Unauthorized: missing x-session-id'));
+    return next(new ApiError(401, 'Unauthorized: missing session ID'));
   }
   (req as any).sessionId = sessionId;
   next();

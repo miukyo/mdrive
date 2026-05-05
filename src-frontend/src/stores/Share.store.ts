@@ -7,6 +7,8 @@ type Store = {
 	createShare: (type: "file" | "folder", folderId?: number, messageId?: number) => Promise<{ success: boolean; url?: string; message?: string }>;
 	getShare: (token: string) => Promise<{ success: boolean; message?: string }>;
 	getShares: () => Promise<{ success: boolean; data?: any; message?: string }>;
+	deleteShare: (token: string) => Promise<{ success: boolean; message?: string }>;
+	toggleShare: (token: string) => Promise<{ success: boolean; message?: string }>;
 };
 
 export const useShareStore = create<Store>()((set) => ({
@@ -49,6 +51,30 @@ export const useShareStore = create<Store>()((set) => ({
 			const data = await response.json().catch(() => ({}));
 			return { success: false, message: data.error?.message || "Failed to access share" };
 		}
+		return { success: true };
+	},
+	deleteShare: async (token: string) => {
+		const { sessionId } = useAuthStore.getState();
+		if (!sessionId) return { success: false, message: "No active session" };
+
+		const response = await fetch(API_BASE_URL + `/share/${token}`, {
+			method: "DELETE",
+			headers: { "x-session-id": sessionId },
+		});
+		const data = await response.json();
+		if (!response.ok) return { success: false, message: data.error?.message || "Failed to delete share" };
+		return { success: true };
+	},
+	toggleShare: async (token: string) => {
+		const { sessionId } = useAuthStore.getState();
+		if (!sessionId) return { success: false, message: "No active session" };
+
+		const response = await fetch(API_BASE_URL + `/share/${token}/toggle`, {
+			method: "PATCH",
+			headers: { "x-session-id": sessionId },
+		});
+		const data = await response.json();
+		if (!response.ok) return { success: false, message: data.error?.message || "Failed to toggle share" };
 		return { success: true };
 	},
 }));

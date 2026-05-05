@@ -1,6 +1,5 @@
 @import "tailwindcss";
-@import "@heroui/styles"; 
-
+@import "@heroui/styles";
 /*
  * HeroUI Theme Customization
  * Add this to your global.css after importing @heroui/styles
@@ -16,42 +15,42 @@
   /* Theme Colors (Light Mode) */
   --accent: oklch(88.12% 0.1462 93.65);
   --accent-foreground: oklch(15% 0.0292 93.65);
-  --background: oklch(97.02% 0.0200 93.65);
-  --border: oklch(90.00% 0.0200 93.65);
-  --danger: oklch(65.32% 0.2421 6.52);
+  --background: oklch(97.02% 0.0048 93.65);
+  --border: oklch(90% 0.0048 93.65);
+  --danger: oklch(65.32% 0.235 6.52);
   --danger-foreground: oklch(99.11% 0 0);
-  --default: oklch(94.00% 0.0200 93.65);
+  --default: oklch(94% 0.0048 93.65);
   --default-foreground: oklch(21.03% 0.0059 93.65);
-  --field-background: oklch(100.00% 0.0100 93.65);
-  --field-foreground: oklch(21.03% 0.0200 93.65);
-  --field-placeholder: oklch(55.17% 0.0400 93.65);
+  --field-background: oklch(100% 0.0024 93.65);
+  --field-foreground: oklch(21.03% 0.0048 93.65);
+  --field-placeholder: oklch(55.17% 0.0096 93.65);
   --focus: oklch(88.12% 0.1462 93.65);
-  --foreground: oklch(21.03% 0.0200 93.65);
-  --muted: oklch(55.17% 0.0400 93.65);
-  --overlay: oklch(100.00% 0.0060 93.65);
-  --overlay-foreground: oklch(21.03% 0.0200 93.65);
-  --scrollbar: oklch(87.10% 0.0200 93.65);
-  --segment: oklch(100.00% 0.0200 93.65);
-  --segment-foreground: oklch(21.03% 0.0200 93.65);
-  --separator: oklch(92.00% 0.0200 93.65);
-  --success: oklch(73.29% 0.2012 131.59);
+  --foreground: oklch(21.03% 0.0048 93.65);
+  --muted: oklch(55.17% 0.0096 93.65);
+  --overlay: oklch(100% 0.0014 93.65);
+  --overlay-foreground: oklch(21.03% 0.0048 93.65);
+  --scrollbar: oklch(87.1% 0.0048 93.65);
+  --segment: oklch(100% 0.0048 93.65);
+  --segment-foreground: oklch(21.03% 0.0048 93.65);
+  --separator: oklch(92% 0.0048 93.65);
+  --success: oklch(73.29% 0.1954 131.59);
   --success-foreground: oklch(21.03% 0.0059 131.59);
-  --surface: oklch(100.00% 0.0100 93.65);
-  --surface-foreground: oklch(21.03% 0.0200 93.65);
-  --surface-secondary: oklch(95.24% 0.0160 93.65);
-  --surface-secondary-foreground: oklch(21.03% 0.0200 93.65);
-  --surface-tertiary: oklch(93.73% 0.0160 93.65);
-  --surface-tertiary-foreground: oklch(21.03% 0.0200 93.65);
-  --warning: oklch(78.19% 0.1648 53.11);
+  --surface: oklch(100% 0.0024 93.65);
+  --surface-foreground: oklch(21.03% 0.0048 93.65);
+  --surface-secondary: oklch(95.24% 0.0038 93.65);
+  --surface-secondary-foreground: oklch(21.03% 0.0048 93.65);
+  --surface-tertiary: oklch(93.73% 0.0038 93.65);
+  --surface-tertiary-foreground: oklch(21.03% 0.0048 93.65);
+  --warning: oklch(78.19% 0.16 53.11);
   --warning-foreground: oklch(21.03% 0.0059 53.11);
 
   /* Border Radius */
   --radius: 0.5rem;
-  --field-radius: 0.75rem;
+  --field-radius: 1rem;
 
   /* Font Family */
-  /* Make sure to load Geist font in your app */
-  --font-sans: 'Plus Jakarta Sans Variable', sans-serif;
+  /* Make sure to load DM Sans font in your app */
+  --font-sans: "Plus Jakarta Sans Variable", sans-serif;
 }
 
 .dark,
@@ -60,36 +59,65 @@
   /* Theme Colors (Dark Mode) */
   --accent: oklch(88.12% 0.1462 93.65);
   --accent-foreground: oklch(15% 0.0292 93.65);
-  --background: oklch(12.00% 0.0200 93.65);
-  --border: oklch(28.00% 0.0200 93.65);
-  --danger: oklch(59.40% 0.2046 5.41);
+  --background: oklch(12% 0.0048 93.65);
+  --border: oklch(28% 0.0048 93.65);
+  --danger: oklch(59.4% 0.1986 5.41);
   --danger-foreground: oklch(99.11% 0 0);
-  --default: oklch(27.40% 0.0200 93.65);
+  --default: oklch(27.4% 0.0048 93.65);
   --default-foreground: oklch(99.11% 0 0);
-  --field-background: oklch(21.03% 0.0400 93.65);
-  --field-foreground: oklch(99.11% 0.0200 93.65);
-  --field-placeholder: oklch(70.50% 0.0400 93.65);
+  --field-background: oklch(21.03% 0.0096 93.65);
+  --field-foreground: oklch(99.11% 0.0048 93.65);
+  --field-placeholder: oklch(70.5% 0.0096 93.65);
   --focus: oklch(88.12% 0.1462 93.65);
-  --foreground: oklch(99.11% 0.0200 93.65);
-  --muted: oklch(70.50% 0.0400 93.65);
-  --overlay: oklch(21.03% 0.0400 93.65);
-  --overlay-foreground: oklch(99.11% 0.0200 93.65);
-  --scrollbar: oklch(70.50% 0.0200 93.65);
-  --segment: oklch(39.64% 0.0200 93.65);
-  --segment-foreground: oklch(99.11% 0.0200 93.65);
-  --separator: oklch(25.00% 0.0200 93.65);
-  --success: oklch(73.29% 0.2012 131.59);
+  --foreground: oklch(99.11% 0.0048 93.65);
+  --muted: oklch(70.5% 0.0096 93.65);
+  --overlay: oklch(21.03% 0.0096 93.65);
+  --overlay-foreground: oklch(99.11% 0.0048 93.65);
+  --scrollbar: oklch(70.5% 0.0048 93.65);
+  --segment: oklch(39.64% 0.0048 93.65);
+  --segment-foreground: oklch(99.11% 0.0048 93.65);
+  --separator: oklch(25% 0.0048 93.65);
+  --success: oklch(73.29% 0.1954 131.59);
   --success-foreground: oklch(21.03% 0.0059 131.59);
-  --surface: oklch(21.03% 0.0400 93.65);
-  --surface-foreground: oklch(99.11% 0.0200 93.65);
-  --surface-secondary: oklch(25.70% 0.0300 93.65);
-  --surface-secondary-foreground: oklch(99.11% 0.0200 93.65);
-  --surface-tertiary: oklch(27.21% 0.0300 93.65);
-  --surface-tertiary-foreground: oklch(99.11% 0.0200 93.65);
-  --warning: oklch(82.03% 0.1444 57.12);
+  --surface: oklch(21.03% 0.0096 93.65);
+  --surface-foreground: oklch(99.11% 0.0048 93.65);
+  --surface-secondary: oklch(25.7% 0.0072 93.65);
+  --surface-secondary-foreground: oklch(99.11% 0.0048 93.65);
+  --surface-tertiary: oklch(27.21% 0.0072 93.65);
+  --surface-tertiary-foreground: oklch(99.11% 0.0048 93.65);
+  --warning: oklch(82.03% 0.1401 57.12);
   --warning-foreground: oklch(21.03% 0.0059 57.12);
 }
 
 body {
-  @apply bg-background text-foreground font-sans;
+  @apply bg-background dark:bg-surface text-foreground font-sans;
+}
+
+.table__cell {
+  @apply flex items-center bg-surface-tertiary! border-surface-secondary!;
+}
+
+.modal__container {
+  @apply data-[entering]:animate-in
+    data-[entering]:fade-in-0
+    data-[entering]:zoom-in-95
+    data-[entering]:duration-400
+    data-[entering]:ease-[cubic-bezier(0.16,1,0.3,1)]
+    data-[exiting]:animate-out
+    data-[exiting]:fade-out-0
+    data-[exiting]:zoom-out-95
+    data-[exiting]:duration-200
+    data-[exiting]:ease-[cubic-bezier(0.7,0,0.84,0)];
+}
+
+.modal__backdrop {
+  @apply data-[entering]:duration-400
+    data-[entering]:ease-[cubic-bezier(0.16,1,0.3,1)]
+    data-[exiting]:duration-200
+    data-[exiting]:ease-[cubic-bezier(0.7,0,0.84,0)];
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: oklch(0% 0 0 / 0.15) transparent;
 }

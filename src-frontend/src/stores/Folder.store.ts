@@ -4,12 +4,18 @@ import { useAuthStore } from "./Auth.store";
 const API_BASE_URL = import.meta.env.DEV ? "http://localhost:3000/api" : "/api";
 
 type Store = {
+	folders: any[];
+	fetchFolders: () => Promise<void>;
 	getFolders: () => Promise<{ success: boolean; data?: any; message?: string }>;
 	createFolder: (name: string, parentId?: number) => Promise<{ success: boolean; data?: any; message?: string }>;
 	deleteFolder: (id: number) => Promise<{ success: boolean; message?: string }>;
 };
 
-export const useFolderStore = create<Store>()((set) => ({
+export const useFolderStore = create<Store>()((set, get) => ({
+	folders: [],
+	fetchFolders: async () => {
+		await get().getFolders();
+	},
 	getFolders: async () => {
 		const { sessionId } = useAuthStore.getState();
 		if (!sessionId) return { success: false, message: "No active session" };
@@ -19,6 +25,7 @@ export const useFolderStore = create<Store>()((set) => ({
 		});
 		const data = await response.json();
 		if (!response.ok) return { success: false, message: data.error?.message || "Failed to fetch folders" };
+		set({ folders: data.data });
 		return { success: true, data: data.data };
 	},
 	createFolder: async (name: string, parentId?: number) => {
