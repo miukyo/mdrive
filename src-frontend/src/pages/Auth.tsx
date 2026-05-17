@@ -221,7 +221,10 @@ const RegisterForm = ({ setMode }: { setMode: setModeFunction }) => {
       });
     } else if (passwordMode) {
       if (!password) {
-        dispatch({ type: "SET_ERROR", payload: "Please enter your 2FA password" });
+        dispatch({
+          type: "SET_ERROR",
+          payload: "Please enter your 2FA password",
+        });
         return;
       }
       login2fa(password).then((result) => {
@@ -297,7 +300,7 @@ const RegisterForm = ({ setMode }: { setMode: setModeFunction }) => {
               </TextField>
               <TextField name="otp" type="number">
                 <Label className="ml-1">OTP</Label>
-                <Description>Enter a 6-digit OTP</Description>
+                <Description>Enter a 5-digit OTP</Description>
                 <InputOTP
                   variant="secondary"
                   maxLength={6}
@@ -310,7 +313,6 @@ const RegisterForm = ({ setMode }: { setMode: setModeFunction }) => {
                     <InputOTP.Slot index={2} />
                     <InputOTP.Slot index={3} />
                     <InputOTP.Slot index={4} />
-                    <InputOTP.Slot index={5} />
                   </InputOTP.Group>
                 </InputOTP>
               </TextField>
@@ -318,7 +320,10 @@ const RegisterForm = ({ setMode }: { setMode: setModeFunction }) => {
           ) : passwordMode ? (
             <TextField name="password" type="password">
               <Label className="ml-1">2FA Cloud Password</Label>
-              <Description>This Telegram account is protected by 2-step verification. Enter your password</Description>
+              <Description>
+                This Telegram account is protected by 2-step verification. Enter
+                your password
+              </Description>
               <InputGroup variant="secondary">
                 <InputGroup.Input
                   type="password"

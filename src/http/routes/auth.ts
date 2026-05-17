@@ -18,30 +18,48 @@ import { hashPhone } from "../../db.js";
 
 export const authRouter = new Elysia({ prefix: "/auth" })
   .post(
-    "/send-code",
-    async ({ body: { phone, force_sms, pin, mode = "login" } }) => {
+    "/login",
+    async ({ body: { phone, pin } }) => {
       if (!phone) {
         throw new ApiError(400, "phone is required");
       }
 
-      if (mode === "login" && !force_sms) {
-        const existing = await getActiveSessionByPhone(phone);
+      const existing = await getActiveSessionByPhone(phone);
+      if (!existing || !existing.pin) {
+        throw new ApiError(
+          404,
+          "No active session with PIN found for this phone number",
+        );
+      }
 
-        // If we have an active session with a PIN, handle quick login
-        if (existing && existing.pin) {
-          if (pin) {
-            if (existing.pin === pin) {
-              return { session_id: existing.id, status: "logged_in" };
-            } else {
-              throw new ApiError(403, "Invalid PIN");
-            }
-          }
-          // PIN is required but not provided
-          return { session_id: existing.id, status: "pin_required" };
-        }
+      if (!pin) {
+        return { session_id: existing.id, status: "pin_required" };
+      }
 
-        // If no session exists or session has no PIN, we ignore the 'pin' argument
-        // and proceed to send an OTP for a fresh login.
+      if (existing.pin === pin) {
+        return { session_id: existing.id, status: "logged_in" };
+      } else {
+        throw new ApiError(403, "Invalid PIN");
+      }
+    },
+    {
+      body: t.Object({
+        phone: t.String({
+          description: "Phone number in international format",
+        }),
+        pin: t.Optional(t.String({ description: "Quick login PIN" })),
+      }),
+      detail: {
+        summary: "Quick login with PIN",
+        tags: ["Auth"],
+      },
+    },
+  )
+  .post(
+    "/send-code",
+    async ({ body: { phone } }) => {
+      if (!phone) {
+        throw new ApiError(400, "phone is required");
       }
 
       const api_id = config.TELEGRAM_API_ID;
@@ -84,13 +102,6 @@ export const authRouter = new Elysia({ prefix: "/auth" })
         phone: t.String({
           description: "Phone number in international format",
         }),
-        force_sms: t.Optional(t.Boolean({ default: false })),
-        pin: t.Optional(
-          t.String({ description: "Optional PIN for quick login" }),
-        ),
-        mode: t.Optional(
-          t.Union([t.Literal("login"), t.Literal("register")])
-        ),
       }),
       detail: {
         summary: "Send authentication code",

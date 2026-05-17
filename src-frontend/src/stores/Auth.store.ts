@@ -66,10 +66,10 @@ export const useAuthStore = create<Store>()((set, get) => ({
   loadingMessage: "Loading your session...",
 
   login: async (phone: string, pin: string) => {
-    const response = await fetch(API_BASE_URL + "/auth/send-code", {
+    const response = await fetch(API_BASE_URL + "/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phone, pin, mode: "login" }),
+      body: JSON.stringify({ phone, pin }),
     });
     const data = await response.json();
     if (!response.ok)
@@ -361,7 +361,7 @@ export const useAuthStore = create<Store>()((set, get) => ({
     const response = await fetch(API_BASE_URL + "/auth/send-code", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phone, mode: "register" }),
+      body: JSON.stringify({ phone }),
     });
     const data = await response.json();
     if (!response.ok)

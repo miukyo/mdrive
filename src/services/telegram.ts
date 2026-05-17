@@ -165,13 +165,5 @@ export const removeTelegramClient = async (sessionId: string) => {
 };
 
 export const logoutAndDestroySession = async (sessionId: string) => {
-  try {
-    const client = await getTelegramClient(sessionId, false);
-    await client.invoke(new Api.auth.LogOut());
-  } catch (e) {
-    console.error('Logout error:', e);
-  } finally {
-    await removeTelegramClient(sessionId);
-    await deleteSession(sessionId);
-  }
+  await removeTelegramClient(sessionId);
 };
