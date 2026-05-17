@@ -59,7 +59,7 @@ export const GridItem = React.memo(
     "data-id": dataId,
   }: GridItemProps) => {
     const API_BASE_URL = import.meta.env.DEV
-      ? "http://localhost:3000/api"
+      ? "http://localhost:3002/api"
       : "/api";
 
     const isShare = !!shareToken;

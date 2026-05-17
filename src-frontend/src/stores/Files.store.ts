@@ -3,8 +3,7 @@ import { useAuthStore } from "./Auth.store";
 import { useIndexStore } from "./Index.store";
 import { useProgressStore } from "./Progress.store";
 
-const API_BASE_URL =
-  import.meta.env.DEV ? "http://localhost:3000/api" : "/api";
+const API_BASE_URL = import.meta.env.DEV ? "http://localhost:3002/api" : "/api";
 
 type Store = {
   getFiles: (
@@ -68,14 +67,14 @@ export const useFilesStore = create<Store>()((set) => ({
       formData.append("files", file);
       formData.append("transfer_ids", tid);
       tIds.push(tid);
-      
+
       // Notify progress store
       useProgressStore.getState().startTransfer(tid, file.name);
     });
 
     if (folderId !== undefined)
       formData.append("folder_id", folderId.toString());
-    
+
     // transfer_ids already appended in the loop above
 
     // Give UI time to render toasts before starting heavy upload
@@ -152,10 +151,7 @@ export const useFilesStore = create<Store>()((set) => ({
 
     return { success: true };
   },
-  moveFiles: async (
-    messageIds: number[],
-    targetFolderId: number | null,
-  ) => {
+  moveFiles: async (messageIds: number[], targetFolderId: number | null) => {
     const { sessionId } = useAuthStore.getState();
     if (!sessionId) return { success: false, message: "No active session" };
 
@@ -199,7 +195,10 @@ export const useFilesStore = create<Store>()((set) => ({
     });
     const data = await response.json();
     if (!response.ok)
-      return { success: false, message: data.error?.message || "Rename failed" };
+      return {
+        success: false,
+        message: data.error?.message || "Rename failed",
+      };
 
     // Update store locally
     useIndexStore.setState((state) => ({

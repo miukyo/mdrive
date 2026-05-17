@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { useAuthStore } from "./Auth.store";
 import { toast } from "@heroui/react";
 
-const API_BASE_URL = import.meta.env.DEV ? "http://localhost:3000/api" : "/api";
+const API_BASE_URL = import.meta.env.DEV ? "http://localhost:3002/api" : "/api";
 
 type Transfer = {
   id: string;

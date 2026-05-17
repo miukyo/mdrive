@@ -1,17 +1,17 @@
 import { create } from "zustand";
 import { useAuthStore } from "./Auth.store";
 
-const API_BASE_URL = import.meta.env.DEV ? "http://localhost:3000/api" : "/api";
+const API_BASE_URL = import.meta.env.DEV ? "http://localhost:3002/api" : "/api";
 
 type SearchFilters = {
-	q?: string;
-	category?: string;
-	folderId?: number;
-	startDate?: string;
-	endDate?: string;
-	ids?: string;
-	limit?: number;
-	offset?: number;
+  q?: string;
+  category?: string;
+  folderId?: number;
+  startDate?: string;
+  endDate?: string;
+  ids?: string;
+  limit?: number;
+  offset?: number;
 };
 
 type Store = {
@@ -45,7 +45,8 @@ export const useIndexStore = create<Store>()((set, get) => ({
   isNavigatingFromSearch: false,
   setCurrentFolderId: (id: number) => set({ currentFolderId: id }),
   setSelectedKeys: (keys: any) => set({ selectedKeys: keys }),
-  setNavigatingFromSearch: (val: boolean) => set({ isNavigatingFromSearch: val }),
+  setNavigatingFromSearch: (val: boolean) =>
+    set({ isNavigatingFromSearch: val }),
   refreshIndex: async () => {
     const { sessionId } = useAuthStore.getState();
     if (!sessionId) return { success: false, message: "No active session" };
@@ -87,7 +88,7 @@ export const useIndexStore = create<Store>()((set, get) => ({
         success: false,
         message: data.error?.message || "Search failed",
       };
-    
+
     if (updateState) set({ files: data.data });
     return { success: true, data: data.data };
   },

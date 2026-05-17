@@ -202,7 +202,7 @@ const FileBrowser = React.memo(
     }, [isMoving, movingItems.length]);
 
     const API_BASE_URL = import.meta.env.DEV
-      ? "http://localhost:3000/api"
+      ? "http://localhost:3002/api"
       : "/api";
 
     const handleDownload = useCallback(

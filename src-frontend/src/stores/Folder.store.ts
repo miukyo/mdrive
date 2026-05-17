@@ -1,103 +1,125 @@
 import { create } from "zustand";
 import { useAuthStore } from "./Auth.store";
 
-const API_BASE_URL = import.meta.env.DEV ? "http://localhost:3000/api" : "/api";
+const API_BASE_URL = import.meta.env.DEV ? "http://localhost:3002/api" : "/api";
 
 type Store = {
-	folders: any[];
-	fetchFolders: () => Promise<void>;
-	getFolders: () => Promise<{ success: boolean; data?: any; message?: string }>;
-	createFolder: (name: string, parentId?: number) => Promise<{ success: boolean; data?: any; message?: string }>;
-	deleteFolder: (id: number) => Promise<{ success: boolean; message?: string }>;
-	renameFolder: (id: number, name: string) => Promise<{ success: boolean; message?: string }>;
+  folders: any[];
+  fetchFolders: () => Promise<void>;
+  getFolders: () => Promise<{ success: boolean; data?: any; message?: string }>;
+  createFolder: (
+    name: string,
+    parentId?: number,
+  ) => Promise<{ success: boolean; data?: any; message?: string }>;
+  deleteFolder: (id: number) => Promise<{ success: boolean; message?: string }>;
+  renameFolder: (
+    id: number,
+    name: string,
+  ) => Promise<{ success: boolean; message?: string }>;
 };
 
 export const useFolderStore = create<Store>()((set, get) => ({
-	folders: [],
-	fetchFolders: async () => {
-		await get().getFolders();
-	},
-	getFolders: async () => {
-		const { sessionId } = useAuthStore.getState();
-		if (!sessionId) return { success: false, message: "No active session" };
+  folders: [],
+  fetchFolders: async () => {
+    await get().getFolders();
+  },
+  getFolders: async () => {
+    const { sessionId } = useAuthStore.getState();
+    if (!sessionId) return { success: false, message: "No active session" };
 
-		const response = await fetch(API_BASE_URL + "/folders", {
-			headers: { "x-session-id": sessionId },
-		});
-		const data = await response.json();
-		if (!response.ok) return { success: false, message: data.error?.message || "Failed to fetch folders" };
-		set({ folders: data.data });
-		return { success: true, data: data.data };
-	},
-	createFolder: async (name: string, parentId?: number) => {
-		const { sessionId } = useAuthStore.getState();
-		if (!sessionId) return { success: false, message: "No active session" };
+    const response = await fetch(API_BASE_URL + "/folders", {
+      headers: { "x-session-id": sessionId },
+    });
+    const data = await response.json();
+    if (!response.ok)
+      return {
+        success: false,
+        message: data.error?.message || "Failed to fetch folders",
+      };
+    set({ folders: data.data });
+    return { success: true, data: data.data };
+  },
+  createFolder: async (name: string, parentId?: number) => {
+    const { sessionId } = useAuthStore.getState();
+    if (!sessionId) return { success: false, message: "No active session" };
 
-		const response = await fetch(API_BASE_URL + "/folders", {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-				"x-session-id": sessionId,
-			},
-			body: JSON.stringify({ name, parent_id: parentId }),
-		});
-		const data = await response.json();
-		if (!response.ok) return { success: false, message: data.error?.message || "Failed to create folder" };
-		
-		// Update store locally
-		set((state) => ({ folders: [...state.folders, data.data] }));
-		
-		return { success: true, data: data.data };
-	},
-	renameFolder: async (id: number, name: string) => {
-		const { sessionId } = useAuthStore.getState();
-		if (!sessionId) return { success: false, message: "No active session" };
+    const response = await fetch(API_BASE_URL + "/folders", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-session-id": sessionId,
+      },
+      body: JSON.stringify({ name, parent_id: parentId }),
+    });
+    const data = await response.json();
+    if (!response.ok)
+      return {
+        success: false,
+        message: data.error?.message || "Failed to create folder",
+      };
 
-		const response = await fetch(API_BASE_URL + `/folders/${id}`, {
-			method: "PUT",
-			headers: {
-				"Content-Type": "application/json",
-				"x-session-id": sessionId,
-			},
-			body: JSON.stringify({ name }),
-		});
-		const data = await response.json();
-		if (!response.ok) return { success: false, message: data.error?.message || "Failed to rename folder" };
-		
-		// Update store locally
-		set((state) => ({
-			folders: state.folders.map((f) => (f.id === id ? { ...f, name } : f)),
-		}));
-		
-		return { success: true };
-	},
-	deleteFolder: async (id: number) => {
-		const { sessionId } = useAuthStore.getState();
-		if (!sessionId) return { success: false, message: "No active session" };
+    // Update store locally
+    set((state) => ({ folders: [...state.folders, data.data] }));
 
-		const response = await fetch(API_BASE_URL + `/folders/${id}`, {
-			method: "DELETE",
-			headers: { "x-session-id": sessionId },
-		});
-		const data = await response.json();
-		if (!response.ok) return { success: false, message: data.error?.message || "Failed to delete folder" };
-		
-		// Update store locally (recursive deletion)
-		set((state) => {
-			const getAllDescendants = (folderId: number): number[] => {
-				const children = state.folders.filter((f) => f.parent_id === folderId);
-				let descendants = children.map((c) => c.id);
-				for (const child of children) {
-					descendants = [...descendants, ...getAllDescendants(child.id)];
-				}
-				return descendants;
-			};
-			const idsToDelete = [id, ...getAllDescendants(id)];
-			return {
-				folders: state.folders.filter((f) => !idsToDelete.includes(f.id)),
-			};
-		});
-		
-		return { success: true };
-	},
+    return { success: true, data: data.data };
+  },
+  renameFolder: async (id: number, name: string) => {
+    const { sessionId } = useAuthStore.getState();
+    if (!sessionId) return { success: false, message: "No active session" };
+
+    const response = await fetch(API_BASE_URL + `/folders/${id}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        "x-session-id": sessionId,
+      },
+      body: JSON.stringify({ name }),
+    });
+    const data = await response.json();
+    if (!response.ok)
+      return {
+        success: false,
+        message: data.error?.message || "Failed to rename folder",
+      };
+
+    // Update store locally
+    set((state) => ({
+      folders: state.folders.map((f) => (f.id === id ? { ...f, name } : f)),
+    }));
+
+    return { success: true };
+  },
+  deleteFolder: async (id: number) => {
+    const { sessionId } = useAuthStore.getState();
+    if (!sessionId) return { success: false, message: "No active session" };
+
+    const response = await fetch(API_BASE_URL + `/folders/${id}`, {
+      method: "DELETE",
+      headers: { "x-session-id": sessionId },
+    });
+    const data = await response.json();
+    if (!response.ok)
+      return {
+        success: false,
+        message: data.error?.message || "Failed to delete folder",
+      };
+
+    // Update store locally (recursive deletion)
+    set((state) => {
+      const getAllDescendants = (folderId: number): number[] => {
+        const children = state.folders.filter((f) => f.parent_id === folderId);
+        let descendants = children.map((c) => c.id);
+        for (const child of children) {
+          descendants = [...descendants, ...getAllDescendants(child.id)];
+        }
+        return descendants;
+      };
+      const idsToDelete = [id, ...getAllDescendants(id)];
+      return {
+        folders: state.folders.filter((f) => !idsToDelete.includes(f.id)),
+      };
+    });
+
+    return { success: true };
+  },
 }));

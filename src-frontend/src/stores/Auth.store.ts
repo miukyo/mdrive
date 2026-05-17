@@ -3,7 +3,7 @@ import { useIndexStore } from "./Index.store";
 import { toast } from "@heroui/react";
 
 export const API_BASE_URL = import.meta.env.DEV
-  ? "http://localhost:3000/api"
+  ? "http://localhost:3002/api"
   : "/api";
 
 type UserSession = {

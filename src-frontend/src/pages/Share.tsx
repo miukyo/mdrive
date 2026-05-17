@@ -15,7 +15,7 @@ import { VideoPlayer } from "../components/player/VideoPlayer";
 import { AudioPlayer } from "../components/player/AudioPlayer";
 import FileBrowser from "../components/FileBrowser";
 
-const API_BASE_URL = import.meta.env.DEV ? "http://localhost:3000/api" : "/api";
+const API_BASE_URL = import.meta.env.DEV ? "http://localhost:3002/api" : "/api";
 
 type State = {
   data: any;

@@ -13,7 +13,7 @@ import {
 } from "@tabler/icons-react";
 import { formatSize, getFileIcon } from "../../components/file-browser/utils";
 
-const API_BASE_URL = import.meta.env.DEV ? "http://localhost:3000/api" : "/api";
+const API_BASE_URL = import.meta.env.DEV ? "http://localhost:3002/api" : "/api";
 
 const CATEGORY_COLORS: Record<string, string> = {
   images: "bg-blue-500",
