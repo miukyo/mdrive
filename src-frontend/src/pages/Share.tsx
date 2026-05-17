@@ -136,7 +136,7 @@ export default function Share() {
         ? selectedFile
           ? `${getFileStreamUrl(selectedFile)}&download=1`
           : zipUrl
-        : `${streamUrl}?download=1`;
+        : `${streamUrl}&download=1`;
     window.open(url, "_blank");
   };
 

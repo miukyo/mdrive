@@ -62,11 +62,28 @@ export const streamRouter = new Elysia({ prefix: "/stream" })
     }
   })
   .get("/", async ({ query: { message_id, folder_id, peer_id, download }, sessionId, isPublicShare, share, headers, set }) => {
-    const mId = typeof message_id === 'string' ? parseInt(message_id, 10) : message_id;
-    const fId = peer_id ? (typeof peer_id === 'string' ? parseInt(peer_id, 10) : peer_id) : (folder_id ? (typeof folder_id === 'string' ? parseInt(folder_id, 10) : folder_id) : null);
+    let mId: number;
+    if (message_id === undefined || message_id === null) {
+      if (isPublicShare && share && share.share_type === "file" && share.message_id !== null) {
+        mId = share.message_id;
+      } else {
+        throw new ApiError(400, "invalid message_id");
+      }
+    } else {
+      mId = typeof message_id === 'string' ? parseInt(message_id, 10) : message_id;
+    }
 
     if (isNaN(mId)) {
       throw new ApiError(400, "invalid message_id");
+    }
+
+    let fId: number | null = null;
+    if (peer_id) {
+      fId = typeof peer_id === 'string' ? parseInt(peer_id, 10) : peer_id;
+    } else if (folder_id !== undefined && folder_id !== null) {
+      fId = typeof folder_id === 'string' ? parseInt(folder_id, 10) : folder_id;
+    } else if (isPublicShare && share && share.share_type === "file") {
+      fId = share.folder_id;
     }
 
     if (isPublicShare) {
@@ -270,7 +287,7 @@ export const streamRouter = new Elysia({ prefix: "/stream" })
     });
   }, {
     query: t.Object({
-      message_id: t.Union([t.Number(), t.String()]),
+      message_id: t.Optional(t.Union([t.Number(), t.String()])),
       folder_id: t.Optional(t.Union([t.Number(), t.String(), t.Null()])),
       peer_id: t.Optional(t.Union([t.Number(), t.String(), t.Null()])),
       session_id: t.Optional(t.String()),
