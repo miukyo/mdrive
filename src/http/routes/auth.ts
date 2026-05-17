@@ -15,6 +15,11 @@ import { Api } from "telegram";
 import { config } from "../../config.js";
 import { refreshIndex } from "../../services/indexer.js";
 import { hashPhone } from "../../db.js";
+import crypto from "node:crypto";
+
+function hashPin(pin: string): string {
+  return crypto.createHash("sha256").update(pin).digest("hex");
+}
 
 export const authRouter = new Elysia({ prefix: "/auth" })
   .post(
@@ -36,7 +41,7 @@ export const authRouter = new Elysia({ prefix: "/auth" })
         return { session_id: existing.id, status: "pin_required" };
       }
 
-      if (existing.pin === pin) {
+      if (existing.pin === hashPin(pin)) {
         return { session_id: existing.id, status: "logged_in" };
       } else {
         throw new ApiError(403, "Invalid PIN");
@@ -238,7 +243,7 @@ export const authRouter = new Elysia({ prefix: "/auth" })
     "/set-pin",
     async ({ body: { pin }, headers }) => {
       const sessionId = headers["x-session-id"]!;
-      await createOrUpdateSession({ id: sessionId, pin });
+      await createOrUpdateSession({ id: sessionId, pin: hashPin(pin) });
       return { status: "pin_updated" };
     },
     {
