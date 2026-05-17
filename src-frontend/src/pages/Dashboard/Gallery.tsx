@@ -111,12 +111,11 @@ const GalleryItem = React.memo(
 
     return (
       <div
-        className="absolute transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]"
+        className="absolute"
         style={{
           transform: `translate3d(${item.x}px, ${item.y}px, 0)`,
           width: item.w,
           height: item.h,
-          willChange: "transform, width, height",
         }}
       >
         <Surface
@@ -176,10 +175,16 @@ const GalleryItem = React.memo(
           )}
         </div> */}
 
-          {/* Actions Dropdown */}
           <div
+            role="button"
+            tabIndex={0}
             className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-all duration-300 scale-90 group-hover:scale-100"
             onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.stopPropagation();
+              }
+            }}
           >
             <Dropdown>
               <Button
@@ -269,24 +274,23 @@ export default function Gallery() {
   );
 
   const mediaFiles = useMemo(() => {
-    return files
-      .filter(
-        (f) => f.mime_type?.includes("image") || f.mime_type?.includes("video"),
-      )
-      .map((f) => {
+    return files.reduce((acc: any[], f) => {
+      if (f.mime_type?.includes("image") || f.mime_type?.includes("video")) {
         const hash = f.id
           .toString()
           .split("")
           .reduce((a: number, b: string) => a + b.charCodeAt(0), 0);
         const defaultHeight = 250 + (hash % 100);
 
-        return {
+        acc.push({
           id: f.id.toString(),
-          img: `${API_BASE_URL}/thumbnail?message_id=${f.id}${f.folder_id ? `&folder_id=${f.folder_id}` : ""}&session_id=${sessionId}`,
+          img: `${API_BASE_URL}/thumbnail?message_id=${f.id}${f.folder_id ? `&folder_id=${f.folder_id}` : ""}${f.peer_id ? `&peer_id=${f.peer_id}` : ""}&session_id=${sessionId}`,
           file: f,
           defaultHeight,
-        };
-      });
+        });
+      }
+      return acc;
+    }, []);
   }, [files, sessionId, API_BASE_URL]);
 
   const playlist = useMemo(() => mediaFiles.map((m) => m.file), [mediaFiles]);
@@ -358,16 +362,16 @@ export default function Gallery() {
   const totalHeight = Math.max(0, ...grid.map((i) => i.y + i.h));
 
   return (
-    <div className="flex flex-col gap-6 p-4 md:p-8 h-full">
+    <div className="flex flex-col gap-6 h-full animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="flex flex-col gap-1">
-        <h1 className="text-3xl font-bold tracking-tight">Gallery</h1>
+        <h1 className="text-3xl font-semibold tracking-tight">Gallery</h1>
         <p className="text-muted text-sm font-medium">
           Browse your media collection
         </p>
       </div>
 
       {mediaFiles.length === 0 ? (
-        <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center py-20">
+        <div className="h-[50vh] flex flex-col items-center justify-center gap-4 text-center py-20">
           <Surface variant="tertiary" className="p-8 rounded-full bg-white/5">
             <IconArchiveFilled className="size-12 text-muted/20" />
           </Surface>
@@ -403,6 +407,7 @@ export default function Gallery() {
       )}
 
       <FileActionModals
+        key={selectedFile?.id}
         selectedFile={selectedFile}
         isRenameOpen={isRenameOpen}
         setIsRenameOpen={setIsRenameOpen}

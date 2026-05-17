@@ -1,41 +1,12 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  Button,
-  Description,
-  Dropdown,
-  EmptyState,
-  Header,
-  Label,
-  Modal,
-  Separator,
-  Surface,
-  Virtualizer,
-  type Selection,
-  Checkbox,
-  TextField,
-  InputGroup,
-  Table,
-  TableLayout,
-  toast,
-  Spinner,
-} from "@heroui/react";
-import {
-  IconArchiveFilled,
-  IconDotsVertical,
-  IconDownload,
-  IconEdit,
-  IconFileDescriptionFilled,
-  IconLayoutGrid,
-  IconList,
-  IconMusic,
-  IconPhotoFilled,
-  IconVideoFilled,
-  IconFolderPlus,
-  IconFolder,
-  IconPlus,
-  IconShare,
-  IconTrash,
-} from "@tabler/icons-react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { type Selection, toast, Spinner } from "@heroui/react";
+import { IconFolderSymlink, IconPlus, IconFolder } from "@tabler/icons-react";
 import { useAuthStore } from "../stores/Auth.store";
 import { useFilesStore } from "../stores/Files.store";
 import { useIndexStore } from "../stores/Index.store";
@@ -43,182 +14,149 @@ import { usePreviewStore } from "../stores/Preview.store";
 import { useFolderStore } from "../stores/Folder.store";
 import { FileActionModals } from "./FileActionModals";
 
+// Sub-components
+import { Toolbar } from "./file-browser/Toolbar";
+import { GridView } from "./file-browser/GridView";
+import { TableView } from "./file-browser/TableView";
+
 interface FileBrowserProps {
-  files: any[];
+  files?: any[];
+  folders?: any[];
+  mode?: "admin" | "readonly";
+  shareToken?: string;
+  onFolderClick?: (id: number) => void;
+  onFileClick?: (file: any) => void;
+  isLoading?: boolean;
+  isRoot?: boolean;
+  height?: string;
 }
 
-const formatSize = (bytes: number) => {
-  if (!bytes || bytes === 0) return "0 B";
-  const k = 1024;
-  const sizes = ["B", "KB", "MB", "GB", "TB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
-};
-
-const GridItem = React.memo(
+const FileBrowser = React.memo(
   ({
-    file,
-    openPreview,
-    handleDownload,
-    handleShare,
-    handleRenameClick,
-    handleDeleteClick,
-    formatSize,
-    getFileIcon,
-    sessionId,
-    isFolder,
-    isBack,
-    onClick,
-  }: any) => {
-    const API_BASE_URL = import.meta.env.DEV
-      ? "http://localhost:3000/api"
-      : "/api";
-
-    return (
-      <Surface
-        variant="tertiary"
-        className="group relative flex flex-col justify-center p-2 rounded-3xl border border-white/5 hover:border-primary/50 transition-all cursor-pointer overflow-hidden"
-        onClick={onClick}
-      >
-        <div className="relative mb-3 aspect-16/12 w-full rounded-2xl bg-white/5 overflow-hidden flex items-center justify-center">
-          {isFolder ? (
-            <IconFolder className="size-10 text-blue-500" />
-          ) : file.mime_type?.includes("image") ||
-            file.mime_type?.includes("video") ? (
-            <>
-              <img
-                src={`${API_BASE_URL}/thumbnail?message_id=${file.id}${file.folder_id ? `&folder_id=${file.folder_id}` : ""}&session_id=${sessionId}`}
-                alt={file.name}
-                loading="lazy"
-                className="size-full object-cover"
-                onError={(e) => {
-                  (e.target as HTMLElement).style.display = "none";
-                  const fallback = (e.target as HTMLElement)
-                    .nextElementSibling as HTMLElement;
-                  if (fallback) {
-                    fallback.classList.remove("hidden");
-                    fallback.classList.add("flex");
-                  }
-                }}
-              />
-              <div className="hidden size-full items-center justify-center">
-                {getFileIcon(file.mime_type, "size-10")}
-              </div>
-            </>
-          ) : (
-            getFileIcon(file.mime_type, "size-10")
-          )}
-        </div>
-        <span className="text-xs font-medium truncate w-full text-center px-2">
-          {file.name}
-        </span>
-        <span className="text-[10px] text-muted mt-1 text-center px-2 mb-2">
-          {isFolder ? "Folder" : formatSize(file.size)}
-        </span>
-
-        {!isBack && !isFolder && (
-          <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
-            <Dropdown>
-              <Button
-                isIconOnly
-                size="sm"
-                aria-label="Menu"
-                variant="tertiary"
-                className="size-7"
-              >
-                <IconDotsVertical className="size-3.5" />
-              </Button>
-              <Dropdown.Popover>
-                <Dropdown.Menu
-                  onAction={(key) => {
-                    if (key === "download") handleDownload(file);
-                    if (key === "share") handleShare(file);
-                    if (key === "rename") handleRenameClick(file);
-                    if (key === "delete") handleDeleteClick(file);
-                  }}
-                >
-                  <Dropdown.Section>
-                    <Header>Actions</Header>
-                    <Dropdown.Item id="download" textValue="Download">
-                      <IconDownload className="size-4" />
-                      <Label>Download</Label>
-                    </Dropdown.Item>
-                    <Dropdown.Item id="share" textValue="Share">
-                      <IconShare className="size-4" />
-                      <Label>Share</Label>
-                    </Dropdown.Item>
-                    <Dropdown.Item id="rename" textValue="Rename">
-                      <IconEdit className="size-4" />
-                      <Label>Rename</Label>
-                    </Dropdown.Item>
-                  </Dropdown.Section>
-                  <Separator />
-                  <Dropdown.Section>
-                    <Header>Danger zone</Header>
-                    <Dropdown.Item
-                      id="delete"
-                      textValue="Delete"
-                      variant="danger"
-                    >
-                      <IconTrash className="size-4" />
-                      <Label>Delete</Label>
-                    </Dropdown.Item>
-                  </Dropdown.Section>
-                </Dropdown.Menu>
-              </Dropdown.Popover>
-            </Dropdown>
-          </div>
-        )}
-      </Surface>
+    files: propsFiles,
+    folders: propsFolders,
+    mode = "admin",
+    shareToken,
+    onFolderClick,
+    onFileClick,
+    isLoading: propsIsLoading,
+    isRoot = true,
+    height = "100%",
+  }: FileBrowserProps) => {
+    const [viewMode, setViewMode] = useState<"table" | "grid">(
+      mode === "admin" ? "grid" : "table",
     );
-  },
-);
+    const isAdmin = mode === "admin";
 
-export const FileBrowser = React.memo(
-  ({ files: allFiles }: FileBrowserProps) => {
-    const [viewMode, setViewMode] = useState<"table" | "grid">("grid");
-    const [currentFolderId, setCurrentFolderId] = useState<number>(0);
-    const { open: openPreview } = usePreviewStore();
-    const { deleteFiles, renameFile, shareFile } = useFilesStore();
-    const { fetchData, fetchFolderContents } = useIndexStore();
-    const { sessionId } = useAuthStore();
-    const { folders, fetchFolders, createFolder } = useFolderStore();
+    // Stores (only used in admin mode)
+    const filesStore = useFilesStore();
+    const indexStore = useIndexStore();
+    const authStore = useAuthStore();
+    const folderStore = useFolderStore();
+    const previewStore = usePreviewStore();
+
+    const [localFolderId, setLocalFolderId] = useState<number>(0);
+    const [localSelectedKeys, setLocalSelectedKeys] = useState<Selection>(
+      new Set(),
+    );
+
+    const currentFolderId = isAdmin
+      ? indexStore.currentFolderId
+      : localFolderId;
+    const setCurrentFolderId = isAdmin
+      ? indexStore.setCurrentFolderId
+      : setLocalFolderId;
+
+    const selectedKeys = isAdmin ? indexStore.selectedKeys : localSelectedKeys;
+    const setSelectedKeys = isAdmin
+      ? indexStore.setSelectedKeys
+      : setLocalSelectedKeys;
+
+    const sessionId = isAdmin ? authStore.sessionId : null;
+
+    const folders = isAdmin ? folderStore.folders : propsFolders || [];
+    const allFiles = isAdmin ? indexStore.files : propsFiles || [];
+    const isLoading = isAdmin ? indexStore.isLoading : propsIsLoading;
 
     const [isRenameOpen, setIsRenameOpen] = useState(false);
     const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+    const lastSelectedId = useRef<any>(null);
     const [selectedFile, setSelectedFile] = useState<any>(null);
     const [displayLimit, setDisplayLimit] = useState(24);
     const [isActionLoading, setIsActionLoading] = useState(false);
-
-    const [selectedKeys, setSelectedKeys] = useState<Selection>(new Set());
+    const [isDragging, setIsDragging] = useState(false);
+    const dragCounter = useRef(0);
     const [isNewFolderOpen, setIsNewFolderOpen] = useState(false);
-    const [newFolderName, setNewFolderName] = useState("");
-    const [isFolderLoading, setIsFolderLoading] = useState(false);
-    const [isLoading, setIsLoading] = useState(false);
+    const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false);
+    const [isMoving, setIsMoving] = useState(false);
+    const [movingItems, setMovingItems] = useState<number[]>([]);
+    const [isPending, startTransition] = React.useTransition();
     const isFirstLoad = useRef(true);
 
-    useEffect(() => {
-      fetchFolders();
+    const onDragEnter = useCallback((e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dragCounter.current++;
+      if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+        setIsDragging(true);
+      }
     }, []);
 
-    useEffect(() => {
-      const load = async () => {
-        setIsLoading(true);
-        const startTime = Date.now();
-        await fetchFolderContents(currentFolderId);
-        const endTime = Date.now();
-        const duration = endTime - startTime;
-        const minDelay = isFirstLoad.current ? 300 : 0; // Only delay on first mount
-        if (duration < minDelay) {
-          await new Promise((resolve) =>
-            setTimeout(resolve, minDelay - duration),
+    const onDragLeave = useCallback((e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dragCounter.current--;
+      if (dragCounter.current === 0) {
+        setIsDragging(false);
+      }
+    }, []);
+
+    const onDragOver = useCallback((e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+    }, []);
+
+    const onDrop = useCallback(
+      async (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(false);
+        dragCounter.current = 0;
+
+        const files = e.dataTransfer.files;
+        if (files && files.length > 0) {
+          if (!isAdmin) {
+            toast.warning("Upload is disabled in readonly mode");
+            return;
+          }
+          // toast.info(`Uploading ${files.length} files...`);
+          const res = await filesStore.uploadFiles(
+            files,
+            currentFolderId || undefined,
           );
+          if (!res.success) {
+            toast.danger(res.message || "Upload failed");
+          }
         }
-        setIsLoading(false);
-        isFirstLoad.current = false;
-      };
-      load();
-    }, [currentFolderId, fetchFolderContents]);
+      },
+      [currentFolderId, filesStore, isAdmin],
+    );
+
+    useEffect(() => {
+      if (isAdmin) {
+        folderStore.fetchFolders();
+      }
+    }, [isAdmin]);
+
+    useEffect(() => {
+      if (isAdmin) {
+        startTransition(() => {
+          indexStore.fetchFolderContents(currentFolderId).then(() => {
+            isFirstLoad.current = false;
+          });
+        });
+      }
+    }, [currentFolderId, isAdmin]);
 
     useEffect(() => {
       if (viewMode === "grid" && allFiles.length > displayLimit) {
@@ -233,17 +171,70 @@ export const FileBrowser = React.memo(
       setDisplayLimit(24);
     }, [allFiles.length]);
 
+    const confirmBulkMoveRef = useRef<() => void>(undefined);
+    const cancelMoveRef = useRef<() => void>(undefined);
+
+    useEffect(() => {
+      confirmBulkMoveRef.current = confirmBulkMove;
+      cancelMoveRef.current = cancelMove;
+    });
+
+    useEffect(() => {
+      if (isMoving && movingItems.length > 0) {
+        toast("Moving items", {
+          actionProps: {
+            children: "Move Here",
+            onPress: () => {
+              confirmBulkMoveRef.current?.();
+              toast.clear();
+            },
+            variant: "primary",
+          },
+          description: `Navigate to target folder to move ${movingItems.length} items`,
+          indicator: <IconFolderSymlink className="size-4" />,
+          variant: "default",
+          onClose: () => {
+            cancelMoveRef.current?.();
+          },
+          timeout: 0,
+        });
+      }
+    }, [isMoving, movingItems.length]);
+
+    const API_BASE_URL = import.meta.env.DEV
+      ? "http://localhost:3000/api"
+      : "/api";
+
     const handleDownload = useCallback(
-      (file: any) => {
-        const url = `/stream?message_id=${file.id}${file.folder_id ? `&folder_id=${file.folder_id}` : ""}&download=1&session_id=${sessionId}`;
-        window.open(url, "_blank");
+      async (item: any) => {
+        if (item.isFolder) {
+          if (isAdmin) {
+            const zipUrl = `${API_BASE_URL}/stream/zip?folder_id=${item.id}&session_id=${sessionId}`;
+            window.open(zipUrl, "_blank");
+          } else if (shareToken) {
+            const zipUrl = `${API_BASE_URL}/stream/zip?share_token=${shareToken}&folder_id=${item.id}`;
+            window.open(zipUrl, "_blank");
+          }
+        } else {
+          let url = "";
+          if (isAdmin) {
+            url = `${API_BASE_URL}/stream?message_id=${item.id}${item.folder_id ? `&folder_id=${item.folder_id}` : ""}&download=1&session_id=${sessionId}`;
+          } else if (shareToken) {
+            url = `${API_BASE_URL}/stream?share_token=${shareToken}&message_id=${item.id}${item.folder_id ? `&folder_id=${item.folder_id}` : ""}&download=1`;
+          }
+          if (url) window.open(url, "_blank");
+        }
       },
-      [sessionId],
+      [sessionId, isAdmin, shareToken, API_BASE_URL, filesStore],
     );
 
     const handleShare = useCallback(
-      async (file: any) => {
-        const res = await shareFile(file.id, file.folder_id);
+      async (item: any) => {
+        if (!isAdmin) return;
+        const res = item.isFolder
+          ? await filesStore.shareFile(0, item.id)
+          : await filesStore.shareFile(item.id, item.folder_id);
+
         if (res.success && res.url) {
           navigator.clipboard.writeText(res.url);
           toast.success("Share link copied to clipboard!");
@@ -251,7 +242,7 @@ export const FileBrowser = React.memo(
           toast.danger(res.message || "Failed to create share link");
         }
       },
-      [shareFile],
+      [isAdmin, filesStore],
     );
 
     const handleRenameClick = useCallback((file: any) => {
@@ -266,35 +257,44 @@ export const FileBrowser = React.memo(
 
     const handleCellClick = useCallback(
       (file: any) => {
-        openPreview(file, allFiles);
+        if (!isAdmin && onFileClick) {
+          onFileClick(file);
+          return;
+        }
+        previewStore.open(file, allFiles);
       },
-      [openPreview, allFiles],
+      [previewStore, allFiles, isAdmin, onFileClick],
     );
 
-    const getFileIcon = useCallback(
-      (mimeType: string, className = "size-4 shrink-0") => {
-        if (mimeType?.includes("image"))
-          return <IconPhotoFilled className={`${className} text-blue-500`} />;
-        if (mimeType?.includes("video"))
-          return <IconVideoFilled className={`${className} text-purple-500`} />;
-        if (mimeType?.includes("audio"))
-          return <IconMusic className={`${className} text-emerald-500`} />;
-        return (
-          <IconFileDescriptionFilled
-            className={`${className} text-amber-500`}
-          />
-        );
+    const handleFolderClick = useCallback(
+      (folderId: number) => {
+        setSelectedKeys(new Set()); // Clear selection when changing folders
+        if (!isAdmin) {
+          onFolderClick?.(folderId);
+          return;
+        }
+
+        if (folderId === -1) {
+          const currentFolder = folders.find((f) => f.id === currentFolderId);
+          setCurrentFolderId(currentFolder?.parent_id || 0);
+        } else {
+          setCurrentFolderId(folderId);
+        }
       },
-      [],
+      [folders, currentFolderId, isAdmin, onFolderClick, setCurrentFolderId],
     );
 
     const currentFolders = useMemo(() => {
+      if (!isAdmin) return folders.map((f) => ({ ...f, isFolder: true }));
       return folders.filter((f) => (f.parent_id || 0) === currentFolderId);
-    }, [folders, currentFolderId]);
+    }, [folders, currentFolderId, isAdmin]);
 
     const currentFiles = useMemo(() => {
-      return allFiles; // Now already filtered by store
-    }, [allFiles]);
+      if (!isAdmin) return allFiles.map((f) => ({ ...f, isFolder: false }));
+      return allFiles.filter(
+        (f) => (f.folder_id || 0) === (currentFolderId || 0),
+      );
+    }, [allFiles, currentFolderId, isAdmin]);
 
     const displayItems = useMemo(() => {
       const items = [
@@ -302,7 +302,7 @@ export const FileBrowser = React.memo(
         ...currentFiles.map((f) => ({ ...f, isFolder: false })),
       ];
 
-      if (currentFolderId !== 0) {
+      if (isAdmin ? currentFolderId !== 0 : !isRoot) {
         items.unshift({
           id: -1,
           name: "..",
@@ -312,400 +312,384 @@ export const FileBrowser = React.memo(
       }
 
       return items;
-    }, [currentFolders, currentFiles, currentFolderId]);
+    }, [currentFolders, currentFiles, currentFolderId, isAdmin, isRoot]);
 
-    const handleFolderClick = (folderId: number) => {
-      if (folderId === -1) {
-        const currentFolder = folders.find((f) => f.id === currentFolderId);
-        setCurrentFolderId(currentFolder?.parent_id || 0);
-      } else {
-        setCurrentFolderId(folderId);
-      }
-    };
-    const handleNewFolder = async () => {
-      if (!newFolderName.trim()) return;
-      setIsFolderLoading(true);
-      const res = await createFolder(
-        newFolderName,
-        currentFolderId === 0 ? undefined : currentFolderId,
-      );
-      setIsFolderLoading(false);
-      if (res.success) {
-        toast.success("Folder created");
-        setIsNewFolderOpen(false);
-        setNewFolderName("");
-        fetchFolders();
-      } else {
-        toast.danger(res.message || "Failed to create folder");
-      }
-    };
+    const handleItemClick = useCallback(
+      (e: React.MouseEvent, item: any) => {
+        if ((e.target as HTMLElement).closest(".stop-propagation")) return;
 
-    const handleBulkDelete = async () => {
-      if (selectedKeys === "all") {
-        toast.warning("Bulk delete for 'all' not implemented for safety");
-        return;
-      }
-      const ids = Array.from(selectedKeys as Set<string | number>);
-      if (ids.length === 0) return;
+        const hasModifier = e.shiftKey || e.ctrlKey || e.metaKey;
+        if (hasModifier && !isAdmin) return; // Don't open or select in readonly if modifier is held
+        if (isAdmin && e.shiftKey) {
+          if (lastSelectedId.current === null) {
+            // No anchor yet, just select this item and make it the anchor
+            const newKeys = new Set(
+              selectedKeys === "all" ? [] : (selectedKeys as Set<any>),
+            );
+            newKeys.add(item.id);
+            setSelectedKeys(newKeys);
+            lastSelectedId.current = item.id;
+            return;
+          }
 
-      if (confirm(`Delete ${ids.length} items?`)) {
-        setIsActionLoading(true);
-        let successCount = 0;
-        for (const id of ids) {
-          const file = allFiles.find((f) => f.id === id);
-          if (file) {
-            const res = await deleteFiles([file.id], file.folder_id);
-            if (res.success) successCount++;
+          const currentIndex = displayItems.findIndex(
+            (i: any) => i.id === item.id,
+          );
+          const lastIndex = displayItems.findIndex(
+            (i: any) => i.id === lastSelectedId.current,
+          );
+
+          if (currentIndex !== -1 && lastIndex !== -1) {
+            const start = Math.min(currentIndex, lastIndex);
+            const end = Math.max(currentIndex, lastIndex);
+            const rangeIds = displayItems
+              .slice(start, end + 1)
+              .map((i: any) => i.id);
+
+            const newKeys = new Set(
+              selectedKeys === "all" ? [] : (selectedKeys as Set<any>),
+            );
+            const currentSelected =
+              selectedKeys instanceof Set ? selectedKeys : new Set();
+            const isUnselecting = currentSelected.has(item.id);
+
+            rangeIds.forEach((id) => {
+              if (id === -1) return;
+              if (isUnselecting) {
+                newKeys.delete(id);
+              } else {
+                newKeys.add(id);
+              }
+            });
+            setSelectedKeys(newKeys);
+            lastSelectedId.current = item.id;
+            return;
           }
         }
-        setIsActionLoading(false);
-        toast.success(`Deleted ${successCount} files`);
-        setSelectedKeys(new Set());
-        fetchData();
+
+        if (isAdmin && (e.ctrlKey || e.metaKey)) {
+          const newKeys = new Set(
+            selectedKeys === "all" ? [] : (selectedKeys as Set<any>),
+          );
+          if (newKeys.has(item.id)) {
+            newKeys.delete(item.id);
+          } else {
+            newKeys.add(item.id);
+            lastSelectedId.current = item.id;
+          }
+          setSelectedKeys(newKeys);
+          return;
+        }
+
+        // Single Click (no modifiers or in readonly): Open
+        if (hasModifier) return; // Final safeguard: don't open if any modifier is held
+
+        if (item.isFolder || item.isBack) {
+          handleFolderClick(item.id);
+        } else {
+          handleCellClick(item);
+        }
+        // Update last selected for potential shift-click next
+        lastSelectedId.current = item.id;
+      },
+      [
+        isAdmin,
+        selectedKeys,
+        displayItems,
+        handleFolderClick,
+        handleCellClick,
+        setSelectedKeys,
+      ],
+    );
+
+    const breadcrumbs = useMemo(() => {
+      const path = [{ id: 0, name: "All Files" }];
+      if (currentFolderId === 0) return path;
+
+      const stack = [];
+      let curr = folders.find((f) => f.id === currentFolderId);
+      while (curr) {
+        stack.unshift({ id: curr.id, name: curr.name });
+        if (!curr.parent_id || curr.parent_id === 0) break;
+        curr = folders.find((f) => f.id === curr.parent_id);
       }
+      return [...path, ...stack];
+    }, [folders, currentFolderId]);
+
+    useEffect(() => {
+      if (
+        indexStore.isNavigatingFromSearch &&
+        selectedKeys instanceof Set &&
+        selectedKeys.size === 1
+      ) {
+        const id = Array.from(selectedKeys)[0];
+        const timer = setTimeout(() => {
+          const element = document.querySelector(`[data-id="${id}"]`);
+          if (element) {
+            element.scrollIntoView({ behavior: "smooth", block: "center" });
+            indexStore.setNavigatingFromSearch(false);
+          }
+        }, 300);
+        return () => clearTimeout(timer);
+      }
+    }, [selectedKeys, indexStore.isNavigatingFromSearch]);
+
+    useEffect(() => {
+      const handleKeyUp = (e: KeyboardEvent) => {
+        if (e.key === "Shift") {
+          lastSelectedId.current = null;
+        }
+      };
+      window.addEventListener("keyup", handleKeyUp);
+      return () => window.removeEventListener("keyup", handleKeyUp);
+    }, []);
+
+    const handleBulkDelete = useCallback(() => {
+      setIsBulkDeleteOpen(true);
+    }, []);
+
+    const executeBulkDelete = async () => {
+      let ids: number[] = [];
+      if (selectedKeys === "all") {
+        ids = displayItems.reduce((acc: number[], i: any) => {
+          if (!i.isBack) acc.push(i.id);
+          return acc;
+        }, []);
+      } else {
+        ids = Array.from(selectedKeys as Set<number>);
+      }
+
+      if (ids.length === 0) return;
+
+      setIsActionLoading(true);
+      let successCount = 0;
+
+      try {
+        const foldersToDelete = displayItems.filter(
+          (i: any) => ids.includes(i.id) && i.isFolder,
+        );
+        const filesToDelete = displayItems.filter(
+          (i: any) => ids.includes(i.id) && !i.isFolder,
+        );
+
+        // Delete folders concurrently
+        await Promise.all(
+          foldersToDelete.map((folder: any) =>
+            folderStore.deleteFolder(folder.id),
+          ),
+        );
+        successCount += foldersToDelete.length;
+
+        // Delete all selected files in a single batch call
+        if (filesToDelete.length > 0) {
+          const fileIds = filesToDelete.map((f: any) => f.id);
+          const res = await filesStore.deleteFiles(fileIds);
+          if (res.success) successCount += fileIds.length;
+        }
+
+        toast.danger(`Deleted ${successCount} items`);
+        setSelectedKeys(new Set());
+        setIsBulkDeleteOpen(false);
+      } catch (error) {
+        console.error("Bulk delete error:", error);
+        toast.danger("An error occurred during bulk deletion");
+      } finally {
+        setIsActionLoading(false);
+      }
+    };
+
+    const handleBulkMove = useCallback(() => {
+      let ids: number[] = [];
+      if (selectedKeys === "all") {
+        ids = displayItems.reduce((acc: number[], i: any) => {
+          if (!i.isBack) acc.push(i.id);
+          return acc;
+        }, []);
+      } else {
+        ids = Array.from(selectedKeys as Set<number>);
+      }
+
+      if (ids.length === 0) return;
+      setMovingItems(ids);
+      setIsMoving(true);
+      setSelectedKeys(new Set());
+    }, [selectedKeys, displayItems, setSelectedKeys]);
+
+    const handleMoveSingleClick = useCallback(
+      (item: any) => {
+        setMovingItems([item.id]);
+        setIsMoving(true);
+        setSelectedKeys(new Set());
+      },
+      [setSelectedKeys],
+    );
+
+    const confirmBulkMove = async () => {
+      setIsActionLoading(true);
+      toast.info("Moving items...");
+      const res = await filesStore.moveFiles(movingItems, currentFolderId);
+      setIsActionLoading(false);
+      if (res.success) {
+        toast.success(`Moved ${movingItems.length} items`);
+        setIsMoving(false);
+        setMovingItems([]);
+        folderStore.fetchFolders();
+        indexStore.fetchData();
+      } else {
+        toast.danger(res.message || "Failed to move items");
+      }
+    };
+
+    const cancelMove = () => {
+      setIsMoving(false);
+      setMovingItems([]);
+    };
+
+    const handleRefreshIndex = async () => {
+      setIsActionLoading(true);
+      toast.info("Refreshing index from Telegram...");
+      const res = await indexStore.refreshIndex();
+      if (res.success) {
+        toast.success("Index refreshed successfully");
+        await Promise.all([indexStore.fetchData(), folderStore.fetchFolders()]);
+      } else {
+        toast.danger(res.message || "Failed to refresh index");
+      }
+      setIsActionLoading(false);
     };
 
     return (
-      <div className="flex flex-col gap-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <h3 className="text-lg font-semibold text-foreground/80">
-              {currentFolderId === 0
-                ? "All Files"
-                : folders.find((f) => f.id === currentFolderId)?.name ||
-                  "Folder"}
-            </h3>
-            {selectedKeys !== "all" && selectedKeys.size > 0 && (
-              <div className="flex items-center gap-1 animate-in fade-in slide-in-from-left-1">
-                <Separator orientation="vertical" className="h-4 mx-2" />
-                <Button
-                  size="sm"
-                  variant="danger"
-                  className="h-8"
-                  onPress={handleBulkDelete}
-                >
-                  <IconTrash className="size-4 mr-1" />
-                  Delete {selectedKeys.size}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="tertiary"
-                  className="h-8"
-                  onPress={() => setSelectedKeys(new Set())}
-                >
-                  Clear
-                </Button>
-              </div>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              variant="secondary"
-              className="h-9"
-              onPress={() => setIsNewFolderOpen(true)}
-            >
-              <IconPlus className="size-4 mr-2" />
-              New Folder
-            </Button>
-            <div className="flex items-center gap-1 bg-surface-tertiary p-1 rounded-xl border border-white/5">
-              <Button
-                isIconOnly
-                size="sm"
-                variant={viewMode === "table" ? "primary" : "tertiary"}
-                className="rounded-lg"
-                onPress={() => setViewMode("table")}
-              >
-                <IconList className="size-4" />
-              </Button>
-              <Button
-                isIconOnly
-                size="sm"
-                variant={viewMode === "grid" ? "primary" : "tertiary"}
-                className="rounded-lg"
-                onPress={() => setViewMode("grid")}
-              >
-                <IconLayoutGrid className="size-4" />
-              </Button>
+      <div
+        className={`flex flex-col gap-4 relative select-none ${height}`}
+        onDragEnter={onDragEnter}
+        onDragOver={onDragOver}
+        onDragLeave={onDragLeave}
+        onDrop={onDrop}
+      >
+        {isAdmin && isDragging && (
+          <div className="absolute pointer-events-none inset-0 z-50 flex flex-col items-center justify-center bg-background/80 backdrop-blur-sm border-2 border-dashed border-primary rounded-xl animate-in fade-in duration-200">
+            <div className="bg-primary/10 p-6 rounded-full mb-4">
+              <IconPlus className="size-12 text-primary animate-bounce" />
             </div>
-          </div>
-        </div>
-
-        {isLoading && isFirstLoad.current ? (
-          <div className="flex h-[400px] w-full flex-col items-center justify-center gap-4">
-            <Spinner size="lg" />
-            <span className="text-sm text-muted animate-pulse">
-              Loading your files...
-            </span>
-          </div>
-        ) : viewMode === "table" ? (
-          <Virtualizer
-            layout={TableLayout}
-            layoutOptions={{
-              headingHeight: 42,
-              rowHeight: 42,
-            }}
-          >
-            <Table>
-              <Table.ScrollContainer>
-                <Table.Content
-                  aria-label="Files list"
-                  className="h-[500px] min-w-[700px] overflow-auto rounded-2xl"
-                  selectedKeys={selectedKeys}
-                  selectionMode="multiple"
-                  onSelectionChange={setSelectedKeys}
-                >
-                  <Table.Header className="h-full w-full">
-                    <Table.Column className="pr-0" width={40}>
-                      <Checkbox aria-label="Select all" slot="selection">
-                        <Checkbox.Control>
-                          <Checkbox.Indicator />
-                        </Checkbox.Control>
-                      </Checkbox>
-                    </Table.Column>
-                    <Table.Column isRowHeader id="name" minWidth={240}>
-                      Name
-                    </Table.Column>
-                    <Table.Column id="type" width={200}>
-                      Type
-                    </Table.Column>
-                    <Table.Column id="size" width={200}>
-                      Size
-                    </Table.Column>
-                    <Table.Column id="date" width={300}>
-                      Uploaded at
-                    </Table.Column>
-                    <Table.Column id="actions" width={50}>
-                      Actions
-                    </Table.Column>
-                  </Table.Header>
-                  <Table.Body
-                    items={displayItems.slice(0, displayLimit)}
-                    renderEmptyState={() => (
-                      <EmptyState className="flex h-full w-full flex-col items-center justify-center gap-4 text-center">
-                        <IconArchiveFilled className="size-10" />
-                        <span className="text-sm text-muted">
-                          No files found
-                        </span>
-                      </EmptyState>
-                    )}
-                  >
-                    {(item: any) => (
-                      <Table.Row
-                        key={
-                          item.isFolder
-                            ? `folder-${item.id}`
-                            : `file-${item.id}`
-                        }
-                        id={item.id}
-                      >
-                        <Table.Cell className="pr-0">
-                          {!item.isBack && (
-                            <Checkbox
-                              aria-label={`Select ${item.name}`}
-                              slot="selection"
-                              variant="secondary"
-                            >
-                              <Checkbox.Control>
-                                <Checkbox.Indicator />
-                              </Checkbox.Control>
-                            </Checkbox>
-                          )}
-                        </Table.Cell>
-                        <Table.Cell
-                          className="flex items-center gap-2 hover:underline cursor-pointer"
-                          onClick={() => {
-                            if (item.isFolder) {
-                              handleFolderClick(item.id);
-                            } else {
-                              handleCellClick(item);
-                            }
-                          }}
-                        >
-                          {item.isFolder ? (
-                            <IconFolder className="size-4 text-blue-500 shrink-0" />
-                          ) : (
-                            getFileIcon(item.mime_type)
-                          )}
-                          <span className="truncate font-medium">
-                            {item.name}
-                          </span>
-                        </Table.Cell>
-                        <Table.Cell className="uppercase text-muted text-[10px] font-bold">
-                          {item.isFolder
-                            ? "Folder"
-                            : item.name.split(".").pop()}
-                        </Table.Cell>
-                        <Table.Cell className="text-muted">
-                          {item.isFolder ? "--" : formatSize(item.size)}
-                        </Table.Cell>
-                        <Table.Cell className="text-muted">
-                          {item.created_at
-                            ? new Date(item.created_at).toLocaleDateString()
-                            : "--"}
-                        </Table.Cell>
-                        <Table.Cell className="p-0 flex items-center justify-center">
-                          {!item.isBack && !item.isFolder && (
-                            <Dropdown>
-                              <Button
-                                isIconOnly
-                                size="sm"
-                                aria-label="Menu"
-                                variant="tertiary"
-                              >
-                                <IconDotsVertical className="size-4" />
-                              </Button>
-                              <Dropdown.Popover>
-                                <Dropdown.Menu
-                                  onAction={(key) => {
-                                    if (key === "download")
-                                      handleDownload(item);
-                                    if (key === "share") handleShare(item);
-                                    if (key === "rename")
-                                      handleRenameClick(item);
-                                    if (key === "delete")
-                                      handleDeleteClick(item);
-                                  }}
-                                >
-                                  <Dropdown.Section>
-                                    <Header>Actions</Header>
-                                    <Dropdown.Item
-                                      id="download"
-                                      textValue="Download"
-                                    >
-                                      <IconDownload className="size-4" />
-                                      <Label>Download</Label>
-                                    </Dropdown.Item>
-                                    <Dropdown.Item id="share" textValue="Share">
-                                      <IconShare className="size-4" />
-                                      <Label>Share</Label>
-                                    </Dropdown.Item>
-                                    <Dropdown.Item
-                                      id="rename"
-                                      textValue="Rename"
-                                    >
-                                      <IconEdit className="size-4" />
-                                      <Label>Rename</Label>
-                                    </Dropdown.Item>
-                                  </Dropdown.Section>
-                                  <Separator />
-                                  <Dropdown.Section>
-                                    <Header>Danger zone</Header>
-                                    <Dropdown.Item
-                                      id="delete"
-                                      textValue="Delete"
-                                      variant="danger"
-                                    >
-                                      <IconTrash className="size-4" />
-                                      <Label>Delete</Label>
-                                    </Dropdown.Item>
-                                  </Dropdown.Section>
-                                </Dropdown.Menu>
-                              </Dropdown.Popover>
-                            </Dropdown>
-                          )}
-                        </Table.Cell>
-                      </Table.Row>
-                    )}
-                  </Table.Body>
-                </Table.Content>
-              </Table.ScrollContainer>
-            </Table>
-          </Virtualizer>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
-            {displayItems.slice(0, displayLimit).map((item: any) => (
-              <GridItem
-                key={item.isFolder ? `folder-${item.id}` : `file-${item.id}`}
-                file={item}
-                isFolder={item.isFolder}
-                isBack={item.isBack}
-                onClick={() => {
-                  if (item.isFolder) {
-                    handleFolderClick(item.id);
-                  } else {
-                    handleCellClick(item);
-                  }
-                }}
-                openPreview={(f: any) => openPreview(f, allFiles)}
-                handleDownload={handleDownload}
-                handleShare={handleShare}
-                handleRenameClick={handleRenameClick}
-                handleDeleteClick={handleDeleteClick}
-                formatSize={formatSize}
-                getFileIcon={getFileIcon}
-                sessionId={sessionId}
-              />
-            ))}
-            {displayItems.length === 0 && (
-              <div className="col-span-full py-20 flex flex-col items-center justify-center gap-4 text-center">
-                <IconArchiveFilled className="size-10 text-muted/20" />
-                <span className="text-sm text-muted">No items found</span>
-              </div>
-            )}
+            <h3 className="text-xl font-semibold">Drop files to upload</h3>
+            <p className="text-muted text-sm mt-2">
+              They will be uploaded to the current folder
+            </p>
           </div>
         )}
 
-        <FileActionModals
-          selectedFile={selectedFile}
-          isRenameOpen={isRenameOpen}
-          setIsRenameOpen={setIsRenameOpen}
-          isDeleteOpen={isDeleteOpen}
-          setIsDeleteOpen={setIsDeleteOpen}
-          onRename={renameFile}
-          onDelete={deleteFiles}
-        />
+        {isAdmin && (
+          <Toolbar
+            breadcrumbs={breadcrumbs}
+            selectedKeys={selectedKeys}
+            viewMode={viewMode}
+            setViewMode={setViewMode}
+            handleFolderClick={handleFolderClick}
+            handleBulkMove={handleBulkMove}
+            handleBulkDelete={handleBulkDelete}
+            setSelectedKeys={setSelectedKeys}
+            handleRefreshIndex={handleRefreshIndex}
+            setIsNewFolderOpen={setIsNewFolderOpen}
+            isAdmin={isAdmin}
+            isActionLoading={isActionLoading}
+            isLoading={isLoading || false}
+          />
+        )}
 
-        {/* New Folder Modal */}
-        <Modal.Backdrop
-          isOpen={isNewFolderOpen}
-          onOpenChange={setIsNewFolderOpen}
-        >
-          <Modal.Container>
-            <Modal.Dialog className="sm:max-w-[400px]">
-              <Modal.CloseTrigger />
-              <Modal.Header>
-                <Modal.Icon className="bg-primary/10 text-primary">
-                  <IconFolderPlus className="size-5" />
-                </Modal.Icon>
-                <Modal.Heading>New Folder</Modal.Heading>
-              </Modal.Header>
-              <Modal.Body>
-                <div className="flex flex-col gap-4 p-1">
-                  <TextField className="w-full">
-                    <Label>Folder Name</Label>
-                    <InputGroup>
-                      <InputGroup.Input
-                        autoFocus
-                        placeholder="Enter folder name..."
-                        value={newFolderName}
-                        onChange={(e) => setNewFolderName(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") handleNewFolder();
-                        }}
-                      />
-                    </InputGroup>
-                  </TextField>
-                </div>
-              </Modal.Body>
-              <Modal.Footer>
-                <Button
-                  variant="tertiary"
-                  onPress={() => setIsNewFolderOpen(false)}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  isPending={isFolderLoading}
-                  variant="primary"
-                  onPress={handleNewFolder}
-                >
-                  Create Folder
-                </Button>
-              </Modal.Footer>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
+        {isLoading || (isPending && isFirstLoad.current) ? (
+          <div className="flex h-full w-full flex-col items-center justify-center gap-4">
+            <Spinner size="lg" />
+            <span className="text-sm text-muted animate-pulse">
+              Loading your files&hellip;
+            </span>
+          </div>
+        ) : viewMode === "table" ? (
+          <TableView
+            displayItems={displayItems}
+            displayLimit={displayLimit}
+            selectedKeys={selectedKeys}
+            setSelectedKeys={setSelectedKeys}
+            handleItemClick={handleItemClick}
+            handleFolderClick={handleFolderClick}
+            handleCellClick={handleCellClick}
+            handleDownload={handleDownload}
+            handleShare={handleShare}
+            handleRenameClick={handleRenameClick}
+            handleDeleteClick={handleDeleteClick}
+            handleMoveSingleClick={handleMoveSingleClick}
+            isAdmin={isAdmin}
+          />
+        ) : (
+          <GridView
+            displayItems={displayItems}
+            displayLimit={displayLimit}
+            selectedKeys={selectedKeys}
+            setSelectedKeys={setSelectedKeys}
+            handleItemClick={handleItemClick}
+            handleCellClick={handleCellClick}
+            handleDownload={handleDownload}
+            handleShare={handleShare}
+            handleRenameClick={handleRenameClick}
+            handleDeleteClick={handleDeleteClick}
+            handleMoveSingleClick={handleMoveSingleClick}
+            sessionId={sessionId}
+            shareToken={shareToken}
+            isAdmin={isAdmin}
+            height={height}
+          />
+        )}
+
+        {isAdmin && (
+          <FileActionModals
+            selectedFile={selectedFile}
+            isRenameOpen={isRenameOpen}
+            setIsRenameOpen={setIsRenameOpen}
+            isDeleteOpen={isDeleteOpen}
+            setIsDeleteOpen={setIsDeleteOpen}
+            isNewFolderOpen={isNewFolderOpen}
+            setIsNewFolderOpen={setIsNewFolderOpen}
+            isBulkDeleteOpen={isBulkDeleteOpen}
+            setIsBulkDeleteOpen={setIsBulkDeleteOpen}
+            isActionLoading={isActionLoading}
+            onRename={async (id, name) => {
+              if (selectedFile?.isFolder) {
+                const res = await folderStore.renameFolder(
+                  selectedFile.id,
+                  name,
+                );
+                return res;
+              }
+              const res = await filesStore.renameFile(
+                id,
+                name,
+                currentFolderId,
+              );
+              return res;
+            }}
+            onDelete={async (ids) => {
+              if (selectedFile?.isFolder) {
+                const res = await folderStore.deleteFolder(selectedFile.id);
+                return res;
+              }
+              const res = await filesStore.deleteFiles(ids);
+              return res;
+            }}
+            onNewFolder={async (name) => {
+              const res = await folderStore.createFolder(
+                name,
+                currentFolderId === 0 ? undefined : currentFolderId,
+              );
+              if (res.success) {
+                toast.success("Folder created");
+                folderStore.fetchFolders();
+              } else {
+                toast.danger(res.message || "Failed to create folder");
+              }
+              return res;
+            }}
+            onBulkDelete={executeBulkDelete}
+          />
+        )}
       </div>
     );
   },

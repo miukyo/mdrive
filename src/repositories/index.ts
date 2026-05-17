@@ -13,10 +13,10 @@ export const saveFolderIndex = async (phone: string, folder: FolderMetadata) => 
 export const saveFileIndex = async (phone: string, file: FileMetadata) => {
   sqlite
     .query(
-      `INSERT INTO telegram_index_files (phone, folder_id, message_id, name, size, mime_type, file_ext, created_at, icon_type, chunk_id, chunk_index, total_chunks)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO telegram_index_files (phone, folder_id, message_id, peer_id, name, size, mime_type, file_ext, created_at, icon_type, chunk_id, chunk_index, total_chunks)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT (phone, folder_id, message_id) DO UPDATE
-     SET name = EXCLUDED.name, size = EXCLUDED.size, mime_type = EXCLUDED.mime_type, file_ext = EXCLUDED.file_ext, icon_type = EXCLUDED.icon_type, 
+     SET peer_id = EXCLUDED.peer_id, name = EXCLUDED.name, size = EXCLUDED.size, mime_type = EXCLUDED.mime_type, file_ext = EXCLUDED.file_ext, icon_type = EXCLUDED.icon_type, 
          chunk_id = EXCLUDED.chunk_id, chunk_index = EXCLUDED.chunk_index, total_chunks = EXCLUDED.total_chunks,
          indexed_at = CURRENT_TIMESTAMP`,
     )
@@ -24,6 +24,7 @@ export const saveFileIndex = async (phone: string, file: FileMetadata) => {
       phone,
       file.folder_id || 0,
       file.id,
+      file.peer_id || 0,
       file.name,
       file.size,
       file.mime_type || null,
@@ -64,6 +65,7 @@ export const searchFiles = async (
     SELECT 
       MIN(message_id) as message_id, 
       folder_id, 
+      peer_id,
       name, 
       MAX(size) as size, 
       mime_type, 
@@ -137,6 +139,7 @@ export const searchFiles = async (
   return rows.map((row) => ({
     id: row.message_id,
     folder_id: row.folder_id === 0 ? null : row.folder_id,
+    peer_id: row.peer_id,
     name: row.name,
     size: row.size,
     mime_type: row.mime_type,
@@ -164,6 +167,28 @@ export const getFileFolders = async (
     message_id: r.message_id,
     folder_id: r.folder_id === 0 ? null : r.folder_id,
   }));
+};
+
+export const getAllChunkMessageIds = async (
+  phone: string,
+  messageIds: number[],
+): Promise<number[]> => {
+  if (messageIds.length === 0) return [];
+  const placeholders = messageIds.map(() => "?").join(",");
+  const rows = sqlite
+    .query(
+      `SELECT DISTINCT message_id FROM telegram_index_files 
+       WHERE phone = ? AND (
+         message_id IN (${placeholders}) OR 
+         (chunk_id IS NOT NULL AND chunk_id IN (
+           SELECT DISTINCT chunk_id FROM telegram_index_files 
+           WHERE phone = ? AND message_id IN (${placeholders}) AND chunk_id IS NOT NULL
+         ))
+       )`,
+    )
+    .all(phone, ...messageIds, phone, ...messageIds) as any[];
+
+  return rows.map((r) => r.message_id);
 };
 
 export const getStorageStats = async (phone: string) => {
@@ -233,6 +258,90 @@ export const getFolders = async (phone: string): Promise<FolderMetadata[]> => {
 };
 
 export const deleteFolderIndex = async (phone: string, folderId: number) => {
-  sqlite.query('DELETE FROM telegram_index_folders WHERE phone = ? AND folder_id = ?').run(phone, folderId);
-  sqlite.query('DELETE FROM telegram_index_files WHERE phone = ? AND folder_id = ?').run(phone, folderId);
+  // Use a CTE to find all subfolders recursively
+  sqlite.query(
+    `DELETE FROM telegram_index_files 
+     WHERE phone = ? AND folder_id IN (
+       WITH RECURSIVE subordinates AS (
+         SELECT folder_id FROM telegram_index_folders WHERE folder_id = ? AND phone = ?
+         UNION ALL
+         SELECT f.folder_id FROM telegram_index_folders f
+         INNER JOIN subordinates s ON f.parent_id = s.folder_id
+         WHERE f.phone = ?
+       )
+       SELECT folder_id FROM subordinates
+     )`
+  ).run(phone, folderId, phone, phone);
+
+  sqlite.query(
+    `DELETE FROM telegram_index_folders 
+     WHERE phone = ? AND folder_id IN (
+       WITH RECURSIVE subordinates AS (
+         SELECT folder_id FROM telegram_index_folders WHERE folder_id = ? AND phone = ?
+         UNION ALL
+         SELECT f.folder_id FROM telegram_index_folders f
+         INNER JOIN subordinates s ON f.parent_id = s.folder_id
+         WHERE f.phone = ?
+       )
+       SELECT folder_id FROM subordinates
+     )`
+  ).run(phone, folderId, phone, phone);
+};
+export const deleteFilesFromIndex = async (phone: string, messageIds: number[]) => {
+  if (messageIds.length === 0) return;
+  
+  // Find all chunk_ids for these messages to delete all chunks of a file
+  const chunks = sqlite.query(
+    `SELECT DISTINCT chunk_id FROM telegram_index_files 
+     WHERE phone = ? AND message_id IN (${messageIds.map(() => '?').join(',')}) AND chunk_id IS NOT NULL`
+  ).all(phone, ...messageIds) as { chunk_id: string }[];
+
+  const placeholders = messageIds.map(() => '?').join(',');
+  sqlite.query(
+    `DELETE FROM telegram_index_files WHERE phone = ? AND message_id IN (${placeholders})`
+  ).run(phone, ...messageIds);
+
+  // If there are chunks, delete them too
+  if (chunks.length > 0) {
+    const chunkPlaceholders = chunks.map(() => '?').join(',');
+    sqlite.query(
+      `DELETE FROM telegram_index_files WHERE phone = ? AND chunk_id IN (${chunkPlaceholders})`
+    ).run(phone, ...chunks.map(c => c.chunk_id));
+  }
+};
+
+export const moveFilesIndex = async (
+  phone: string,
+  idMapping: Record<number, number>,
+  targetFolderId: number | null,
+  targetPeerId: number,
+) => {
+  const oldIds = Object.keys(idMapping).map(Number);
+  if (oldIds.length === 0) return;
+
+  for (const oldId of oldIds) {
+    const newId = idMapping[oldId];
+    
+    // Find all chunk_ids for this message to move all chunks of a file
+    const chunks = sqlite.query(
+      `SELECT DISTINCT chunk_id FROM telegram_index_files 
+       WHERE phone = ? AND message_id = ? AND chunk_id IS NOT NULL`
+    ).all(phone, oldId) as { chunk_id: string }[];
+
+    // Update the main file entry (this changes the primary key!)
+    sqlite.query(
+      `UPDATE telegram_index_files 
+       SET folder_id = ?, peer_id = ?, message_id = ?, indexed_at = CURRENT_TIMESTAMP 
+       WHERE phone = ? AND message_id = ?`
+    ).run(targetFolderId || 0, targetPeerId, newId, phone, oldId);
+
+    // If there are chunks, move them too
+    if (chunks.length > 0) {
+      const chunkPlaceholders = chunks.map(() => '?').join(',');
+      sqlite.query(
+        `UPDATE telegram_index_files SET folder_id = ?, peer_id = ?, indexed_at = CURRENT_TIMESTAMP 
+         WHERE phone = ? AND chunk_id IN (${chunkPlaceholders})`
+      ).run(targetFolderId || 0, targetPeerId, phone, ...chunks.map(c => c.chunk_id));
+    }
+  }
 };

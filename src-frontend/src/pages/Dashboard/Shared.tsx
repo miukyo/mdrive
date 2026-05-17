@@ -1,16 +1,5 @@
-import React, { useEffect, useState, useMemo } from "react";
-import {
-  Table,
-  Surface,
-  Button,
-  toast,
-  Switch,
-  Spinner,
-  Tooltip,
-  Virtualizer,
-  TableLayout,
-  Modal,
-} from "@heroui/react";
+import { useEffect, useReducer, useMemo } from "react";
+import { Button, toast, Spinner, Tooltip, Modal } from "@heroui/react";
 import {
   IconEye,
   IconEyeOff,
@@ -28,6 +17,39 @@ import { useShareStore } from "../../stores/Share.store";
 import { useIndexStore } from "../../stores/Index.store";
 import { useFolderStore } from "../../stores/Folder.store";
 import { usePreviewStore } from "../../stores/Preview.store";
+import { getFileIcon } from "../../components/file-browser/utils";
+
+type State = {
+  shares: any[];
+  isLoading: boolean;
+  isDeleteOpen: boolean;
+  selectedShare: any;
+  isActionLoading: boolean;
+};
+
+type Action =
+  | { type: "SET_SHARES"; payload: any[] }
+  | { type: "SET_LOADING"; payload: boolean }
+  | { type: "OPEN_DELETE"; payload: any }
+  | { type: "CLOSE_DELETE" }
+  | { type: "SET_ACTION_LOADING"; payload: boolean };
+
+function reducer(state: State, action: Action): State {
+  switch (action.type) {
+    case "SET_SHARES":
+      return { ...state, shares: action.payload };
+    case "SET_LOADING":
+      return { ...state, isLoading: action.payload };
+    case "OPEN_DELETE":
+      return { ...state, isDeleteOpen: true, selectedShare: action.payload };
+    case "CLOSE_DELETE":
+      return { ...state, isDeleteOpen: false, selectedShare: null };
+    case "SET_ACTION_LOADING":
+      return { ...state, isActionLoading: action.payload };
+    default:
+      return state;
+  }
+}
 
 export default function Shared() {
   const { getShares, deleteShare, toggleShare } = useShareStore();
@@ -35,33 +57,26 @@ export default function Shared() {
   const { folders, fetchFolders } = useFolderStore();
   const { open: openPreview } = usePreviewStore();
 
-  const getFileIcon = (mimeType: string, className = "size-4 shrink-0") => {
-    if (mimeType?.includes("image"))
-      return <IconPhotoFilled className={`${className} text-blue-500`} />;
-    if (mimeType?.includes("video"))
-      return <IconVideoFilled className={`${className} text-purple-500`} />;
-    if (mimeType?.includes("audio"))
-      return <IconMusic className={`${className} text-emerald-500`} />;
-    return (
-      <IconFileDescriptionFilled className={`${className} text-amber-500`} />
-    );
-  };
+  const [state, dispatch] = useReducer(reducer, {
+    shares: [],
+    isLoading: true,
+    isDeleteOpen: false,
+    selectedShare: null,
+    isActionLoading: false,
+  });
 
-  const [shares, setShares] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
-  const [selectedShare, setSelectedShare] = useState<any>(null);
-  const [isActionLoading, setIsActionLoading] = useState(false);
+  const { shares, isLoading, isDeleteOpen, selectedShare, isActionLoading } =
+    state;
 
   const refreshShares = async () => {
-    setIsLoading(true);
+    dispatch({ type: "SET_LOADING", payload: true });
     const res = await getShares();
     if (res.success) {
-      setShares(res.data);
+      dispatch({ type: "SET_SHARES", payload: res.data });
     } else {
       toast.danger(res.message || "Failed to fetch shares");
     }
-    setIsLoading(false);
+    dispatch({ type: "SET_LOADING", payload: false });
   };
 
   useEffect(() => {
@@ -110,18 +125,17 @@ export default function Shared() {
   };
 
   const handleDelete = (share: any) => {
-    setSelectedShare(share);
-    setIsDeleteOpen(true);
+    dispatch({ type: "OPEN_DELETE", payload: share });
   };
 
   const confirmDelete = async () => {
     if (!selectedShare) return;
-    setIsActionLoading(true);
+    dispatch({ type: "SET_ACTION_LOADING", payload: true });
     const res = await deleteShare(selectedShare.token);
-    setIsActionLoading(false);
+    dispatch({ type: "SET_ACTION_LOADING", payload: false });
     if (res.success) {
       toast.success("Share deleted");
-      setIsDeleteOpen(false);
+      dispatch({ type: "CLOSE_DELETE" });
       refreshShares();
     } else {
       toast.danger(res.message || "Failed to delete share");
@@ -139,9 +153,9 @@ export default function Shared() {
   };
 
   return (
-    <div className="flex flex-col gap-6 p-4 md:p-8 h-full">
+    <div className="flex flex-col gap-6 h-full animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="flex flex-col gap-1">
-        <h1 className="text-3xl font-bold tracking-tight">Shared Links</h1>
+        <h1 className="text-3xl font-semibold tracking-tight">Shared Links</h1>
         <p className="text-muted text-sm font-medium">
           Manage your public share links
         </p>
@@ -153,7 +167,7 @@ export default function Shared() {
             <Spinner size="lg" />
           </div>
         ) : shareData.length === 0 ? (
-          <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center">
+          <div className="h-[50vh] flex flex-col items-center justify-center gap-4 text-center">
             <div className="p-8 rounded-full bg-white/5">
               <IconShare className="size-12 text-muted/20" />
             </div>
@@ -167,124 +181,135 @@ export default function Shared() {
             </div>
           </div>
         ) : (
-          <Virtualizer
-            layout={TableLayout}
-            layoutOptions={{
-              headingHeight: 42,
-              rowHeight: 52,
-            }}
-          >
-            <Table aria-label="Shared links table" className="flex-1">
-              <Table.ScrollContainer>
-                <Table.Content className="min-w-[700px]">
-                  <Table.Header>
-                    <Table.Column id="name" minWidth={300} isRowHeader>
-                      Name
-                    </Table.Column>
-                    <Table.Column id="type" width={100}>
-                      Type
-                    </Table.Column>
-                    <Table.Column id="date" width={150}>
-                      Shared at
-                    </Table.Column>
-                    <Table.Column id="status" width={150}>
-                      Status
-                    </Table.Column>
-                    <Table.Column id="actions" width={100}>
-                      Actions
-                    </Table.Column>
-                  </Table.Header>
-                  <Table.Body items={shareData}>
-                    {(item) => (
-                      <Table.Row key={item.token}>
-                        <Table.Cell
-                          className="hover:underline cursor-pointer"
-                          onClick={() => {
-                            if (item.share_type === "file" && item.file) {
-                              openPreview(item.file, [item.file]);
-                            }
-                          }}
-                        >
-                          <div className={`flex items-center gap-3`}>
-                            <div className="p-2 rounded-xl bg-white/5">
-                              {item.icon}
-                            </div>
-                            <span className="font-medium truncate">
-                              {item.name}
-                            </span>
-                          </div>
-                        </Table.Cell>
-                        <Table.Cell className="uppercase">
-                          {item.share_type}
-                        </Table.Cell>
-                        <Table.Cell>
-                          <span className="text-xs text-muted">
-                            {new Date(item.created_at).toLocaleDateString()}
+          <div className="file-table flex flex-col border border-white/5 rounded-3xl overflow-hidden bg-surface/50 backdrop-blur-md">
+            <div className="shared-table-header min-w-[700px] shrink-0">
+              <div>Name</div>
+              <div>Type</div>
+              <div>Shared at</div>
+              <div>Status</div>
+              <div className="text-right">Actions</div>
+            </div>
+            <div className="overflow-y-auto h-[calc(100vh-205px)] min-w-[700px]">
+              <div className="flex flex-col">
+                {shareData.map((item: any) => (
+                  <div
+                    key={item.token}
+                    role="button"
+                    tabIndex={0}
+                    className="shared-table-row"
+                    onClick={(e) => {
+                      if (
+                        (e.target as HTMLElement).closest(".stop-propagation")
+                      )
+                        return;
+                      if (item.share_type === "file" && item.file) {
+                        openPreview(item.file, [item.file]);
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        if (item.share_type === "file" && item.file) {
+                          openPreview(item.file, [item.file]);
+                        }
+                      }
+                    }}
+                  >
+                    <div className="shared-table-cell font-medium text-foreground">
+                      <div className="p-2 rounded-xl bg-white/5 shrink-0">
+                        {item.icon}
+                      </div>
+                      <span className="truncate">{item.name}</span>
+                    </div>
+                    <div className="shared-table-cell uppercase text-xs font-bold text-muted tracking-tight">
+                      {item.share_type}
+                    </div>
+                    <div
+                      className="shared-table-cell text-muted"
+                      suppressHydrationWarning
+                    >
+                      {new Date(item.created_at).toLocaleDateString()}
+                    </div>
+                    <div className="shared-table-cell">
+                      <Tooltip>
+                        <Tooltip.Content>
+                          <p>{item.is_active ? "Public" : "Private"}</p>
+                        </Tooltip.Content>
+                        <Tooltip.Trigger>
+                          <span
+                            role="button"
+                            tabIndex={0}
+                            className={`stop-propagation flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors ${
+                              item.is_active
+                                ? "bg-success/10 text-success hover:bg-success/20"
+                                : "bg-danger/10 text-danger hover:bg-danger/20"
+                            } cursor-pointer`}
+                            onClick={() => handleToggle(item.token)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                handleToggle(item.token);
+                              }
+                            }}
+                          >
+                            {item.is_active ? (
+                              <>
+                                <IconEye className="size-3.5" />
+                                <span>Active</span>
+                              </>
+                            ) : (
+                              <>
+                                <IconEyeOff className="size-3.5" />
+                                <span>Private</span>
+                              </>
+                            )}
                           </span>
-                        </Table.Cell>
-                        <Table.Cell>
-                          <Tooltip>
-                            <Tooltip.Content>
-                              <p>{item.is_active ? "Public" : "Private"}</p>
-                            </Tooltip.Content>
-                            <Tooltip.Trigger>
-                              <span
-                                className={` ${
-                                  item.is_active
-                                    ? "text-success"
-                                    : "text-danger"
-                                } cursor-pointer`}
-                                onClick={() => handleToggle(item.token)}
-                              >
-                                {item.is_active ? <IconEye /> : <IconEyeOff />}
-                              </span>
-                            </Tooltip.Trigger>
-                          </Tooltip>
-                        </Table.Cell>
-                        <Table.Cell className="p-0 flex items-center justify-center">
-                          <div className="flex items-center justify-end gap-1">
-                            <Tooltip>
-                              <Tooltip.Content>
-                                <p>Copy Public Link</p>
-                              </Tooltip.Content>
-                              <Button
-                                isIconOnly
-                                size="sm"
-                                variant="tertiary"
-                                className="size-8"
-                                onPress={() => handleCopyLink(item.publicUrl)}
-                              >
-                                <IconCopy className="size-4" />
-                              </Button>
-                            </Tooltip>
-                            <Tooltip>
-                              <Tooltip.Content>
-                                <p>Delete Share</p>
-                              </Tooltip.Content>
-                              <Button
-                                isIconOnly
-                                size="sm"
-                                variant="tertiary"
-                                className="size-8 text-danger hover:bg-danger/10"
-                                onPress={() => handleDelete(item)}
-                              >
-                                <IconTrash className="size-4" />
-                              </Button>
-                            </Tooltip>
-                          </div>
-                        </Table.Cell>
-                      </Table.Row>
-                    )}
-                  </Table.Body>
-                </Table.Content>
-              </Table.ScrollContainer>
-            </Table>
-          </Virtualizer>
+                        </Tooltip.Trigger>
+                      </Tooltip>
+                    </div>
+                    <div className="shared-table-cell actions stop-propagation">
+                      <div className="flex items-center gap-1">
+                        <Tooltip>
+                          <Tooltip.Content>
+                            <p>Copy Public Link</p>
+                          </Tooltip.Content>
+                          <Button
+                            isIconOnly
+                            size="sm"
+                            variant="tertiary"
+                            className="size-8 rounded-lg"
+                            onPress={() => handleCopyLink(item.publicUrl)}
+                          >
+                            <IconCopy className="size-4" />
+                          </Button>
+                        </Tooltip>
+                        <Tooltip>
+                          <Tooltip.Content>
+                            <p>Delete Share</p>
+                          </Tooltip.Content>
+                          <Button
+                            isIconOnly
+                            size="sm"
+                            variant="tertiary"
+                            className="size-8 rounded-lg text-danger hover:bg-danger/10"
+                            onPress={() => handleDelete(item)}
+                          >
+                            <IconTrash className="size-4" />
+                          </Button>
+                        </Tooltip>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
         )}
       </div>
 
       {/* Delete Modal */}
-      <Modal.Backdrop isOpen={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
+      <Modal.Backdrop
+        isOpen={isDeleteOpen}
+        onOpenChange={(open) => !open && dispatch({ type: "CLOSE_DELETE" })}
+      >
         <Modal.Container>
           <Modal.Dialog className="sm:max-w-[400px]">
             <Modal.CloseTrigger />
@@ -307,7 +332,10 @@ export default function Shared() {
               </div>
             </Modal.Body>
             <Modal.Footer>
-              <Button variant="tertiary" onPress={() => setIsDeleteOpen(false)}>
+              <Button
+                variant="tertiary"
+                onPress={() => dispatch({ type: "CLOSE_DELETE" })}
+              >
                 Cancel
               </Button>
               <Button

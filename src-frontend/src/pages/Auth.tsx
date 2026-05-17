@@ -1,3 +1,4 @@
+import React, { useState, useReducer } from "react";
 import {
   Button,
   Card,
@@ -6,14 +7,11 @@ import {
   InputGroup,
   InputOTP,
   Label,
-  Link,
   TextField,
 } from "@heroui/react";
 import { IconDeviceMobile } from "@tabler/icons-react";
 import PixelBlast from "../components/PixelBackground";
-import { useEffect, useState } from "react";
 import { useAuthStore } from "../stores/Auth.store";
-import { useLocation } from "wouter";
 
 type setModeFunction = React.Dispatch<
   React.SetStateAction<"login" | "register">
@@ -104,59 +102,120 @@ const LoginForm = ({ setMode }: { setMode: setModeFunction }) => {
   );
 };
 
-const RegisterForm = ({ setMode }: { setMode: setModeFunction }) => {
-  const [pinMode, setPinMode] = useState(false);
+type RegisterState = {
+  pinMode: boolean;
+  phone: string;
+  pin: string;
+  otp: string;
+  error: string | null;
+};
 
-  const [phone, setPhone] = useState("");
-  const [pin, setPin] = useState("");
-  const [otp, setOtp] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const { register, sendOtp, setPin: setPinStore } = useAuthStore();
+type RegisterAction =
+  | { type: "SET_PIN_MODE"; payload: boolean }
+  | { type: "SET_PHONE"; payload: string }
+  | { type: "SET_PIN"; payload: string }
+  | { type: "SET_OTP"; payload: string }
+  | { type: "SET_ERROR"; payload: string | null };
+
+function registerReducer(
+  state: RegisterState,
+  action: RegisterAction,
+): RegisterState {
+  switch (action.type) {
+    case "SET_PIN_MODE":
+      return { ...state, pinMode: action.payload };
+    case "SET_PHONE":
+      return { ...state, phone: action.payload };
+    case "SET_PIN":
+      return { ...state, pin: action.payload };
+    case "SET_OTP":
+      return { ...state, otp: action.payload };
+    case "SET_ERROR":
+      return { ...state, error: action.payload };
+    default:
+      return state;
+  }
+}
+
+const RegisterForm = ({ setMode }: { setMode: setModeFunction }) => {
+  const [state, dispatch] = useReducer(registerReducer, {
+    pinMode: false,
+    phone: "",
+    pin: "",
+    otp: "",
+    error: null,
+  });
+
+  const [otpSent, setOtpSent] = useState(0);
+
+  const { pinMode, phone, pin, otp, error } = state;
+  const {
+    register,
+    sendOtp,
+    setPin: setPinStore,
+    completeRegistration,
+  } = useAuthStore();
 
   const handleOtp = (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
+    dispatch({ type: "SET_ERROR", payload: null });
     if (!phone) {
-      setError("Please fill in all fields");
+      dispatch({ type: "SET_ERROR", payload: "Please fill in all fields" });
       return;
     }
+    setOtpSent(1);
     sendOtp(phone).then((result) => {
       if (result.success) {
-        console.log("success");
+        setOtpSent(2);
       } else {
-        setError(result.message || "Failed to send OTP");
+        dispatch({
+          type: "SET_ERROR",
+          payload: result.message || "Failed to send OTP",
+        });
       }
     });
   };
+
+  const handleSkipPin = () => {
+    completeRegistration();
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
+    dispatch({ type: "SET_ERROR", payload: null });
     if (!phone) {
-      setError("Please fill in all fields");
+      dispatch({ type: "SET_ERROR", payload: "Please fill in all fields" });
       return;
     }
-    if (otp.length !== 5) {
-      setError("OTP must be 5 digits");
+    if (otp.length < 5) {
+      dispatch({ type: "SET_ERROR", payload: "OTP is too short" });
       return;
     }
-    // if (pin.length !== 6) {
-    //   setError("PIN must be 6 digits");
-    //   return;
-    // }
+
     if (!pinMode) {
       register(otp).then((result) => {
         if (result.success) {
-          setPinMode(true);
+          dispatch({ type: "SET_PIN_MODE", payload: true });
         } else {
-          setError(result.message || "Registration failed");
+          dispatch({
+            type: "SET_ERROR",
+            payload: result.message || "Registration failed",
+          });
         }
       });
     } else {
+      if (!pin || pin.length !== 6) {
+        dispatch({ type: "SET_ERROR", payload: "PIN must be 6 digits" });
+        return;
+      }
       setPinStore(pin).then((result) => {
         if (result.success) {
-          setMode("login");
+          completeRegistration();
         } else {
-          setError(result.message || "Failed to set PIN");
+          dispatch({
+            type: "SET_ERROR",
+            payload: result.message || "Failed to set PIN",
+          });
         }
       });
     }
@@ -182,7 +241,9 @@ const RegisterForm = ({ setMode }: { setMode: setModeFunction }) => {
                   <InputGroup.Input
                     placeholder="+621234567890"
                     value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
+                    onChange={(e) =>
+                      dispatch({ type: "SET_PHONE", payload: e.target.value })
+                    }
                   />
                   <InputGroup.Suffix className="px-0.5">
                     <Button
@@ -190,8 +251,13 @@ const RegisterForm = ({ setMode }: { setMode: setModeFunction }) => {
                       size="sm"
                       className="text-xs rounded-xl"
                       onClick={handleOtp}
+                      isDisabled={otpSent !== 0}
                     >
-                      Send OTP
+                      {otpSent === 0
+                        ? "Send OTP"
+                        : otpSent === 1
+                          ? "Sending..."
+                          : "OTP Sent!"}
                     </Button>
                   </InputGroup.Suffix>
                 </InputGroup>
@@ -203,7 +269,7 @@ const RegisterForm = ({ setMode }: { setMode: setModeFunction }) => {
                   variant="secondary"
                   maxLength={6}
                   value={otp}
-                  onChange={setOtp}
+                  onChange={(v) => dispatch({ type: "SET_OTP", payload: v })}
                 >
                   <InputOTP.Group>
                     <InputOTP.Slot index={0} />
@@ -223,7 +289,7 @@ const RegisterForm = ({ setMode }: { setMode: setModeFunction }) => {
                 variant="secondary"
                 maxLength={6}
                 value={pin}
-                onChange={setPin}
+                onChange={(v) => dispatch({ type: "SET_PIN", payload: v })}
               >
                 <InputOTP.Group>
                   <InputOTP.Slot index={0} />
@@ -242,6 +308,11 @@ const RegisterForm = ({ setMode }: { setMode: setModeFunction }) => {
         <Button className="w-full" type="submit">
           {!pinMode ? "Next" : "Register"}
         </Button>
+        {pinMode && (
+          <Button className="w-full" variant="tertiary" onClick={handleSkipPin}>
+            Skip and enter dashboard
+          </Button>
+        )}
         <Button
           className="w-full"
           variant="tertiary"
@@ -264,7 +335,7 @@ export default function Auth() {
         pixelSize={4}
       />
       <div className="flex flex-col items-center justify-center h-screen">
-        <h1 className="mb-10 text-6xl font-black tracking-tight z-10 text-foreground">
+        <h1 className="mb-10 text-6xl font-semibold tracking-tight z-10 text-foreground">
           MDrive
         </h1>
         <Card className="w-full max-w-sm">

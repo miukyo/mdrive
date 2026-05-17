@@ -11,7 +11,7 @@ export const getMessageMedia = async (sessionId: string, folderId: number | null
   }
 
   const messages = await client.getMessages(peer, { ids: messageId });
-  if (!messages || messages.length === 0) {
+  if (!messages || messages.length === 0 || !messages[0]) {
     throw new Error('Message not found');
   }
 

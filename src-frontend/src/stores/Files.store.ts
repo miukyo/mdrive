@@ -17,11 +17,9 @@ type Store = {
   ) => Promise<{ success: boolean; message?: string }>;
   deleteFiles: (
     messageIds: number[],
-    folderId?: number,
   ) => Promise<{ success: boolean; message?: string }>;
   moveFiles: (
     messageIds: number[],
-    sourceFolderId: number | null,
     targetFolderId: number | null,
   ) => Promise<{ success: boolean; message?: string }>;
   renameFile: (
@@ -107,8 +105,8 @@ export const useFilesStore = create<Store>()((set) => ({
           const data = JSON.parse(xhr.responseText);
           if (xhr.status >= 200 && xhr.status < 300) {
             // Trigger UI updates
-            const { refreshIndex, fetchData } = useIndexStore.getState();
-            refreshIndex().then(() => fetchData());
+            const { fetchData } = useIndexStore.getState();
+            fetchData();
             resolve({ success: true });
           } else {
             resolve({
@@ -128,17 +126,17 @@ export const useFilesStore = create<Store>()((set) => ({
       xhr.send(formData);
     });
   },
-  deleteFiles: async (messageIds: number[], folderId?: number) => {
+  deleteFiles: async (messageIds: number[]) => {
     const { sessionId } = useAuthStore.getState();
     if (!sessionId) return { success: false, message: "No active session" };
 
-    const response = await fetch(API_BASE_URL + "/files", {
-      method: "DELETE",
+    const response = await fetch(API_BASE_URL + "/files/delete", {
+      method: "POST",
       headers: {
         "Content-Type": "application/json",
         "x-session-id": sessionId,
       },
-      body: JSON.stringify({ message_ids: messageIds, folder_id: folderId }),
+      body: JSON.stringify({ message_ids: messageIds }),
     });
     const data = await response.json();
     if (!response.ok)
@@ -147,37 +145,42 @@ export const useFilesStore = create<Store>()((set) => ({
         message: data.error?.message || "Delete failed",
       };
 
-    // Trigger UI updates
-    const { refreshIndex, fetchData } = useIndexStore.getState();
-    refreshIndex().then(() => fetchData());
+    // Update store locally
+    useIndexStore.setState((state) => ({
+      files: state.files.filter((f) => !messageIds.includes(f.id)),
+    }));
 
     return { success: true };
   },
-	moveFiles: async (messageIds: number[], sourceFolderId: number | null, targetFolderId: number | null) => {
-		const { sessionId } = useAuthStore.getState();
-		if (!sessionId) return { success: false, message: "No active session" };
+  moveFiles: async (
+    messageIds: number[],
+    targetFolderId: number | null,
+  ) => {
+    const { sessionId } = useAuthStore.getState();
+    if (!sessionId) return { success: false, message: "No active session" };
 
-		const response = await fetch(API_BASE_URL + "/files/move", {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-				"x-session-id": sessionId,
-			},
-			body: JSON.stringify({
-				message_ids: messageIds,
-				source_folder_id: sourceFolderId,
-				target_folder_id: targetFolderId,
-			}),
-		});
-		const data = await response.json();
-		if (!response.ok) return { success: false, message: data.error?.message || "Move failed" };
+    const response = await fetch(API_BASE_URL + "/files/move", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-session-id": sessionId,
+      },
+      body: JSON.stringify({
+        message_ids: messageIds,
+        to_folder_id: targetFolderId,
+      }),
+    });
+    const data = await response.json();
+    if (!response.ok)
+      return { success: false, message: data.error?.message || "Move failed" };
 
-    // Trigger UI updates
-    const { refreshIndex, fetchData } = useIndexStore.getState();
-    refreshIndex().then(() => fetchData());
+    // Update store locally (remove from current view as it moved)
+    useIndexStore.setState((state) => ({
+      files: state.files.filter((f) => !messageIds.includes(f.id)),
+    }));
 
-		return { success: true };
-	},
+    return { success: true };
+  },
   renameFile: async (messageId: number, newName: string, folderId?: number) => {
     const { sessionId } = useAuthStore.getState();
     if (!sessionId) return { success: false, message: "No active session" };
@@ -198,14 +201,20 @@ export const useFilesStore = create<Store>()((set) => ({
     if (!response.ok)
       return { success: false, message: data.error?.message || "Rename failed" };
 
-    const { fetchData } = useIndexStore.getState();
-    fetchData();
+    // Update store locally
+    useIndexStore.setState((state) => ({
+      files: state.files.map((f) =>
+        f.id === messageId ? { ...f, name: newName } : f,
+      ),
+    }));
 
     return { success: true };
   },
   shareFile: async (messageId: number, folderId?: number) => {
     const { sessionId } = useAuthStore.getState();
     if (!sessionId) return { success: false, message: "No active session" };
+
+    const isFolder = messageId === 0 && folderId !== undefined;
 
     const response = await fetch(API_BASE_URL + "/share/create", {
       method: "POST",
@@ -214,8 +223,8 @@ export const useFilesStore = create<Store>()((set) => ({
         "x-session-id": sessionId,
       },
       body: JSON.stringify({
-        share_type: "file",
-        message_id: messageId,
+        share_type: isFolder ? "folder" : "file",
+        message_id: isFolder ? undefined : messageId,
         folder_id: folderId,
       }),
     });

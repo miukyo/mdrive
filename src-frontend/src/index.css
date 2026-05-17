@@ -13,7 +13,7 @@
 [data-theme="light"],
 [data-theme="default"] {
   /* Theme Colors (Light Mode) */
-  --accent: oklch(88.12% 0.1462 93.65);
+  --accent: oklch(77.194% 0.17376 64.545);
   --accent-foreground: oklch(15% 0.0292 93.65);
   --background: oklch(97.02% 0.0048 93.65);
   --border: oklch(90% 0.0048 93.65);
@@ -24,7 +24,7 @@
   --field-background: oklch(100% 0.0024 93.65);
   --field-foreground: oklch(21.03% 0.0048 93.65);
   --field-placeholder: oklch(55.17% 0.0096 93.65);
-  --focus: oklch(88.12% 0.1462 93.65);
+  --focus: oklch(77.194% 0.17376 64.545);
   --foreground: oklch(21.03% 0.0048 93.65);
   --muted: oklch(55.17% 0.0096 93.65);
   --overlay: oklch(100% 0.0014 93.65);
@@ -87,6 +87,8 @@
   --surface-tertiary-foreground: oklch(99.11% 0.0048 93.65);
   --warning: oklch(82.03% 0.1401 57.12);
   --warning-foreground: oklch(21.03% 0.0059 57.12);
+
+  --overlay-shadow: 0 0 2px 0 rgba(255, 255, 255, 0.3) inset;
 }
 
 body {
@@ -119,5 +121,126 @@ body {
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: oklch(0% 0 0 / 0.15) transparent;
+  scrollbar-color: oklch(from var(--scrollbar) l c h / 0.15) transparent;
+}
+
+/* Custom File Table Styles */
+.file-table {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border-radius: 1.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  overflow: hidden;
+}
+
+.file-table-header {
+  display: grid;
+  grid-template-columns: 2fr 100px 100px 140px 64px;
+  padding: 0.75rem 1rem;
+  background: var(--surface-secondary);
+  border-bottom: 1px solid var(--separator);
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  align-items: center;
+}
+
+.file-table-row {
+  display: grid;
+  grid-template-columns: 2fr 100px 100px 140px 64px;
+  padding: 0.75rem 1rem;
+  height: 60px;
+  border-bottom: 1px solid var(--separator);
+  align-items: center;
+  /* transition: all 0.2s ease; */
+  cursor: pointer;
+  background: transparent;
+}
+
+.file-table-row:last-child {
+  border-bottom: none;
+}
+
+.file-table-row:hover {
+  background: var(--surface-tertiary);
+}
+
+.is-selected {
+  background: oklch(from var(--accent) l c h / 0.2) !important;
+  border-color: oklch(from var(--accent) l c h / 0.4) !important;
+}
+
+.file-table-cell {
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  overflow: hidden;
+  font-size: 0.875rem;
+}
+
+.file-table-cell.name {
+  font-weight: 500;
+  color: var(--foreground);
+}
+
+.file-table-cell.size,
+.file-table-cell.date,
+.file-table-cell.type {
+  color: var(--muted);
+}
+
+.file-table-cell.actions {
+  justify-content: end;
+}
+
+/* Shared Table Styles */
+.shared-table-header {
+  display: grid;
+  grid-template-columns: 2fr 100px 140px 100px 120px;
+  padding: 0.75rem 1rem;
+  background: var(--surface-secondary);
+  border-bottom: 1px solid var(--separator);
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  align-items: center;
+}
+
+.shared-table-row {
+  display: grid;
+  grid-template-columns: 2fr 100px 140px 100px 120px;
+  padding: 0.75rem 1rem;
+  height: 60px;
+  border-bottom: 1px solid var(--separator);
+  align-items: center;
+  cursor: pointer;
+  background: transparent;
+}
+
+.shared-table-row:last-child {
+  border-bottom: none;
+}
+
+.shared-table-row:hover {
+  background: var(--surface-tertiary);
+}
+
+.shared-table-cell {
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  overflow: hidden;
+  font-size: 0.875rem;
+}
+
+.shared-table-cell.actions {
+  justify-content: end;
 }

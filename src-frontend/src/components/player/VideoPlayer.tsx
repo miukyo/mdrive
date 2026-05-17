@@ -52,14 +52,24 @@ const VideoContainer = (props: { src: string; onLoad?: () => void }) => {
   }, [store]);
 
   return (
-    <div
-      className="size-full cursor-pointer"
-      onClick={() => (store.paused ? store.play() : store.pause())}
-    >
+    <>
+      <div
+        role="button"
+        tabIndex={0}
+        aria-label="Play/Pause"
+        className="inset-0 absolute bottom-15 z-10 cursor-pointer select-none"
+        onClick={() => (store.paused ? store.play() : store.pause())}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            store.paused ? store.play() : store.pause();
+          }
+        }}
+      />
       <MinimalVideoSkin>
         <Video src={props.src} playsInline onCanPlay={props.onLoad} />
       </MinimalVideoSkin>
-    </div>
+    </>
   );
 };
 

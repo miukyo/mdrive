@@ -20,10 +20,18 @@ type Store = {
   refreshIndex: () => Promise<{ success: boolean; message?: string }>;
   search: (
     filters?: SearchFilters,
+    updateState?: boolean,
   ) => Promise<{ success: boolean; data?: any; message?: string }>;
   backup: () => Promise<{ success: boolean; message?: string }>;
   restore: () => Promise<{ success: boolean; data?: any; message?: string }>;
   getStats: () => Promise<{ success: boolean; data?: any; message?: string }>;
+  isLoading: boolean;
+  currentFolderId: number;
+  selectedKeys: any;
+  setCurrentFolderId: (id: number) => void;
+  setSelectedKeys: (keys: any) => void;
+  isNavigatingFromSearch: boolean;
+  setNavigatingFromSearch: (val: boolean) => void;
   fetchData: () => Promise<void>;
   fetchFolderContents: (folderId: number) => Promise<void>;
 };
@@ -31,15 +39,24 @@ type Store = {
 export const useIndexStore = create<Store>()((set, get) => ({
   files: [],
   stats: [],
+  isLoading: false,
+  currentFolderId: 0,
+  selectedKeys: new Set(),
+  isNavigatingFromSearch: false,
+  setCurrentFolderId: (id: number) => set({ currentFolderId: id }),
+  setSelectedKeys: (keys: any) => set({ selectedKeys: keys }),
+  setNavigatingFromSearch: (val: boolean) => set({ isNavigatingFromSearch: val }),
   refreshIndex: async () => {
     const { sessionId } = useAuthStore.getState();
     if (!sessionId) return { success: false, message: "No active session" };
 
+    set({ isLoading: true });
     const response = await fetch(API_BASE_URL + "/index/refresh", {
       method: "POST",
       headers: { "x-session-id": sessionId },
     });
     const data = await response.json();
+    set({ isLoading: false });
     if (!response.ok)
       return {
         success: false,
@@ -47,7 +64,7 @@ export const useIndexStore = create<Store>()((set, get) => ({
       };
     return { success: true };
   },
-  search: async (filters?: SearchFilters) => {
+  search: async (filters?: SearchFilters, updateState = true) => {
     const { sessionId } = useAuthStore.getState();
     if (!sessionId) return { success: false, message: "No active session" };
 
@@ -58,16 +75,20 @@ export const useIndexStore = create<Store>()((set, get) => ({
       });
     }
 
+    if (updateState) set({ isLoading: true });
     const response = await fetch(url.toString(), {
       headers: { "x-session-id": sessionId },
     });
     const data = await response.json();
+    if (updateState) set({ isLoading: false });
+
     if (!response.ok)
       return {
         success: false,
         message: data.error?.message || "Search failed",
       };
-    set({ files: data.data });
+    
+    if (updateState) set({ files: data.data });
     return { success: true, data: data.data };
   },
   backup: async () => {
@@ -106,10 +127,12 @@ export const useIndexStore = create<Store>()((set, get) => ({
     const { sessionId } = useAuthStore.getState();
     if (!sessionId) return { success: false, message: "No active session" };
 
+    set({ isLoading: true });
     const response = await fetch(API_BASE_URL + "/index/stats", {
       headers: { "x-session-id": sessionId },
     });
     const data = await response.json();
+    set({ isLoading: false });
     if (!response.ok)
       return {
         success: false,

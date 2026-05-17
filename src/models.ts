@@ -1,6 +1,7 @@
 export interface FileMetadata {
   id: number;
   folder_id: number | null;
+  peer_id: number;
   name: string;
   size: number;
   mime_type: string | null;

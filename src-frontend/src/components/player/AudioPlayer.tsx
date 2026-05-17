@@ -205,8 +205,17 @@ const AudioContainer = (props: { src: string; onLoad?: () => void }) => {
     <>
       <AudioVisualizer />
       <div
+        role="button"
+        tabIndex={0}
+        aria-label="Play/Pause"
         className="absolute cursor-pointer inset-0 z-0 pointer-events-auto"
         onClick={() => (store.paused ? store.play() : store.pause())}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            store.paused ? store.play() : store.pause();
+          }
+        }}
       ></div>
       <div className="relative size-full flex items-center justify-center p-20">
         <MinimalAudioSkin>

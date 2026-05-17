@@ -5,13 +5,23 @@ import {
   deleteFiles,
   moveFiles,
   renameFile as renameTelegram,
+  resolvePeer,
 } from "../../services/drive.js";
-import { getTelegramClient } from "../../services/telegram.js";
+import { getTelegramClient, getEntitySafe } from "../../services/telegram.js";
 import { CustomFile } from "telegram/client/uploads.js";
+import { Api } from "telegram";
 import { emitProgress } from "../../services/progress.js";
 import { refreshIndex } from "../../services/indexer.js";
 import { getSession } from "../../repositories/sessions.js";
-import { renameFile as renameLocal, getFileFolders } from "../../repositories/index.js";
+import {
+  renameFile as renameLocal,
+  getFileFolders,
+  saveFileIndex,
+  deleteFilesFromIndex,
+  moveFilesIndex,
+  getAllChunkMessageIds,
+} from "../../repositories/index.js";
+import { deleteSharesByFiles, moveShares } from "../../repositories/shares.js";
 import fs from "node:fs";
 import crypto from "node:crypto";
 import path from "node:path";
@@ -59,10 +69,13 @@ export const filesRouter = new Elysia({ prefix: "/files" })
     }
 
     const client = await getTelegramClient(sessionId!);
+    const session = await getSession(sessionId!);
+    if (!session) throw new ApiError(401, "Session not found");
+    
     const fId = folder_id ? parseInt(folder_id, 10) : null;
     const peer = fId
-      ? await client.getInputEntity(fId)
-      : await client.getInputEntity("me");
+      ? await getEntitySafe(sessionId!, fId)
+      : await getEntitySafe(sessionId!, "me");
 
     let idx = 0;
     for (const fileObj of files) {
@@ -116,11 +129,31 @@ export const filesRouter = new Elysia({ prefix: "/files" })
           tot: totalChunks,
         };
 
-        await client.sendFile(peer, {
+        const result = await client.sendFile(peer, {
           file: uploadedFile,
           forceDocument: true,
           caption: `[TD_META]${JSON.stringify(meta)}[/TD_META]`,
         });
+
+        if (result instanceof Api.Message) {
+          const resolvedPeer = await client.getEntity(peer);
+          const peerId = resolvedPeer instanceof Api.User || resolvedPeer instanceof Api.Channel || resolvedPeer instanceof Api.Chat ? Number(resolvedPeer.id) : 0;
+
+          await saveFileIndex(session.phone, {
+            id: result.id,
+            folder_id: fId,
+            peer_id: peerId,
+            name: originalname,
+            size: size,
+            mime_type: file.type,
+            file_ext: path.extname(originalname).slice(1) || null,
+            created_at: new Date().toISOString(),
+            icon_type: "file",
+            chunk_id: chunkId,
+            chunk_index: i,
+            total_chunks: totalChunks,
+          });
+        }
       }
 
       emitProgress(sessionId!, "upload-progress", { id: tid, percent: 100 });
@@ -128,7 +161,6 @@ export const filesRouter = new Elysia({ prefix: "/files" })
       idx++;
     }
 
-    refreshIndex(sessionId!).catch(console.error);
     return { status: "uploaded" };
   }, {
     body: t.Object({
@@ -149,7 +181,9 @@ export const filesRouter = new Elysia({ prefix: "/files" })
     const numericIds = message_ids.map((id) =>
       typeof id === "string" ? parseInt(id, 10) : id,
     );
-    const mappings = await getFileFolders(session.phone, numericIds);
+    // Retrieve all message IDs including chunk messages
+    const allMessageIds = await getAllChunkMessageIds(session.phone, numericIds);
+    const mappings = await getFileFolders(session.phone, allMessageIds);
 
     // Group by folder_id
     const groups: Record<string, number[]> = {};
@@ -164,7 +198,12 @@ export const filesRouter = new Elysia({ prefix: "/files" })
       await deleteFiles(sessionId!, fId, ids);
     }
 
-    refreshIndex(sessionId!).catch(console.error);
+    // Also delete any share links associated with these files
+    await deleteSharesByFiles(session.phone, numericIds);
+
+    // Update local index immediately
+    await deleteFilesFromIndex(session.phone, numericIds);
+
     return { status: "deleted" };
   }, {
     body: t.Object({
@@ -182,34 +221,49 @@ export const filesRouter = new Elysia({ prefix: "/files" })
     const numericIds = message_ids.map((id) =>
       typeof id === "string" ? parseInt(id, 10) : id,
     );
-    const toId =
-      to_folder_id !== undefined
+    const targetFolderId =
+      to_folder_id !== undefined && to_folder_id !== null
         ? typeof to_folder_id === "string"
           ? parseInt(to_folder_id, 10)
-          : to_folder_id
-        : null;
-
-    const mappings = await getFileFolders(session.phone, numericIds);
+          : (to_folder_id as number)
+        : 0;
+    
+    // Resolve all chunk message IDs so they are moved together
+    const allMessageIds = await getAllChunkMessageIds(session.phone, numericIds);
+    const mappings = await getFileFolders(session.phone, allMessageIds);
 
     // Group by source folder_id
     const groups: Record<string, number[]> = {};
     for (const m of mappings) {
-      const key = m.folder_id === null ? "null" : m.folder_id.toString();
+      const key = (m.folder_id === null || m.folder_id === undefined) ? "0" : m.folder_id.toString();
       if (!groups[key]) groups[key] = [];
       groups[key].push(m.message_id);
     }
 
+    const allMappings: Record<number, number> = {};
+
     for (const [fromFolderKey, ids] of Object.entries(groups)) {
-      const fromId = fromFolderKey === "null" ? null : parseInt(fromFolderKey, 10);
-      await moveFiles(sessionId!, ids, fromId, toId);
+      const fromId = parseInt(fromFolderKey, 10);
+      const mapping = await moveFiles(sessionId!, ids, fromId, targetFolderId);
+      Object.assign(allMappings, mapping);
     }
 
-    refreshIndex(sessionId!).catch(console.error);
+    const client = await getTelegramClient(sessionId!);
+    const targetPeer = await resolvePeer(sessionId!, targetFolderId);
+    const resolvedTargetPeer = await client.getEntity(targetPeer);
+    const targetPeerId = resolvedTargetPeer instanceof Api.User || resolvedTargetPeer instanceof Api.Channel || resolvedTargetPeer instanceof Api.Chat ? Number(resolvedTargetPeer.id) : 0;
+
+    // Update local index immediately with new IDs and folder
+    await moveFilesIndex(session.phone, allMappings, targetFolderId, targetPeerId);
+
+    // Update corresponding public share links with new message_ids and target folder
+    await moveShares(session.phone, allMappings, targetFolderId);
+
     return { status: "moved" };
   }, {
     body: t.Object({
       message_ids: t.Array(t.Union([t.Number(), t.String()])),
-      to_folder_id: t.Optional(t.Union([t.Number(), t.String()])),
+      to_folder_id: t.Optional(t.Union([t.Number(), t.String(), t.Null()])),
     }),
     detail: {
       summary: "Move files (auto-detect source folders)",

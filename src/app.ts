@@ -38,6 +38,11 @@ export const app = new Elysia()
       },
     }),
   )
+  .use(staticPlugin({ 
+    assets: path.resolve(process.cwd(), "dist-frontend"), 
+    prefix: "/" 
+  }))
+  .get("/health", () => ({ status: "ok" }))
   .group("/api", (app) =>
     app
       .use(authRouter)
@@ -49,8 +54,6 @@ export const app = new Elysia()
       .use(transfersRouter)
       .use(thumbnailRouter),
   )
-  .get("/health", () => ({ status: "ok" }))
-  .use(staticPlugin({ assets: "dist-frontend", prefix: "/" }))
   .onError(({ code, error, set }) => {
     console.error(`Error [${code}]:`, error);
     
@@ -66,11 +69,45 @@ export const app = new Elysia()
       },
     };
   })
-  // Fallback for SPA routing
-  .get("*", async () => {
-    const file = Bun.file(path.join(process.cwd(), "dist-frontend", "index.html"));
+  // Fallback for SPA routing and static files
+  .get("*", async ({ path: requestPath, headers }) => {
+    const relPath = requestPath.startsWith("/") ? requestPath.slice(1) : requestPath;
+    const filePath = path.join(process.cwd(), "dist-frontend", relPath || "index.html");
+    const file = Bun.file(filePath);
+    
     if (await file.exists()) {
-      return new Response(file);
+      const ext = path.extname(filePath).toLowerCase();
+      const mimeTypes: Record<string, string> = {
+        ".js": "application/javascript",
+        ".mjs": "application/javascript",
+        ".css": "text/css",
+        ".html": "text/html",
+        ".json": "application/json",
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".gif": "image/gif",
+        ".svg": "image/svg+xml",
+        ".ico": "image/x-icon",
+        ".woff": "font/woff",
+        ".woff2": "font/woff2",
+      };
+
+      return new Response(file, {
+        headers: {
+          "Content-Type": mimeTypes[ext] || file.type || "application/octet-stream",
+        },
+      });
+    }
+
+    // Only serve index.html for navigation requests (HTML)
+    if (headers["accept"]?.includes("text/html")) {
+      const indexFile = Bun.file(path.join(process.cwd(), "dist-frontend", "index.html"));
+      if (await indexFile.exists()) {
+        return new Response(indexFile, {
+          headers: { "Content-Type": "text/html" }
+        });
+      }
     }
     return new Response("Not Found", { status: 404 });
   });

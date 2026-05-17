@@ -66,6 +66,7 @@ export const restoreLatestBackup = async (sessionId: string) => {
     await saveFileIndex(phone, {
       id: file.message_id,
       folder_id: file.folder_id === 0 ? null : file.folder_id,
+      peer_id: file.peer_id ?? file.folder_id ?? 0,
       name: file.name,
       size: file.size,
       mime_type: file.mime_type,

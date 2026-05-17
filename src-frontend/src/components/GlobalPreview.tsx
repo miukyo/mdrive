@@ -1,7 +1,12 @@
-import React, { useEffect, useCallback, useState } from "react";
-import { Modal, Surface, Button, Spinner } from "@heroui/react";
 import {
-  IconArchiveFilled,
+  useEffect,
+  useCallback,
+  useState,
+  useRef,
+  useLayoutEffect,
+} from "react";
+import { Modal, Button, Spinner } from "@heroui/react";
+import {
   IconChevronLeft,
   IconChevronRight,
   IconFileUnknownFilled,
@@ -43,21 +48,27 @@ export default function GlobalPreview() {
     }
   }, [canNext, currentIndex, displayFiles, openFile, fileList]);
 
+  const onPrevRef = useRef(handlePrev);
+  const onNextRef = useRef(handleNext);
+  const onSetOpenRef = useRef(setIsOpen);
+
+  useLayoutEffect(() => {
+    onPrevRef.current = handlePrev;
+    onNextRef.current = handleNext;
+    onSetOpenRef.current = setIsOpen;
+  });
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!isOpen) return;
-      if (e.key === "ArrowLeft") handlePrev();
-      if (e.key === "ArrowRight") handleNext();
-      if (e.key === "Escape") setIsOpen(false);
+      if (e.key === "ArrowLeft") onPrevRef.current();
+      if (e.key === "ArrowRight") onNextRef.current();
+      if (e.key === "Escape") onSetOpenRef.current(false);
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, handlePrev, handleNext, setIsOpen]);
-
-  useEffect(() => {
-    setIsMediaLoading(true);
-  }, [selectedFile]);
+  }, [isOpen]);
 
   if (!selectedFile && !isOpen) return null;
 
@@ -65,8 +76,9 @@ export default function GlobalPreview() {
     <Modal.Backdrop isOpen={isOpen} onOpenChange={setIsOpen}>
       <Modal.Container size="cover" className={`px-20 py-10`}>
         <Modal.Dialog
+          key={selectedFile?.id}
           aria-label={selectedFile?.name}
-          className="p-0 overflow-hidden bg-black rounded-4xl "
+          className="p-0 overflow-hidden bg-zinc-950 rounded-4xl "
         >
           {/* Navigation Controls */}
           {canPrev && (
@@ -74,7 +86,7 @@ export default function GlobalPreview() {
               <Button
                 isIconOnly
                 variant="tertiary"
-                className="size-12 rounded-full bg-black/40 backdrop-blur-xl text-white/90 border border-white/10 hover:bg-black/60 transition-all group"
+                className="size-12 rounded-full bg-zinc-900/40 backdrop-blur-xl text-white/90 border border-white/10 hover:bg-zinc-900/60 transition-all group"
                 onPress={handlePrev}
               >
                 <IconChevronLeft className="size-6 group-active:scale-90 transition-transform" />
@@ -87,7 +99,7 @@ export default function GlobalPreview() {
               <Button
                 isIconOnly
                 variant="tertiary"
-                className="size-12 rounded-full bg-black/40 backdrop-blur-xl text-white/90 border border-white/10 hover:bg-black/60 transition-all group"
+                className="size-12 rounded-full bg-zinc-900/40 backdrop-blur-xl text-white/90 border border-white/10 hover:bg-zinc-900/60 transition-all group"
                 onPress={handleNext}
               >
                 <IconChevronRight className="size-6 group-active:scale-90 transition-transform" />
@@ -95,7 +107,7 @@ export default function GlobalPreview() {
             </div>
           )}
 
-          <Modal.CloseTrigger className="z-50 p-4 rounded-full bg-black/60 backdrop-blur-xl text-white/90 border border-white/10 " />
+          <Modal.CloseTrigger className="z-50 p-4 rounded-full bg-zinc-900/60 backdrop-blur-xl text-white/90 border border-white/10 " />
 
           {/* Loading Indicator */}
           {isMediaLoading &&
@@ -112,7 +124,7 @@ export default function GlobalPreview() {
               </div>
             )}
 
-          <div className="absolute left-4 top-4 rounded-4xl z-50 bg-black/60 backdrop-blur-xl text-white/90 border border-white/10 ">
+          <div className="absolute left-4 top-4 rounded-4xl z-50 bg-zinc-900/60 backdrop-blur-xl text-white/90 border border-white/10 ">
             <div className="px-3 py-2 text-xs font-semibold truncate ">
               {selectedFile?.name}
             </div>

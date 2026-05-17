@@ -1,4 +1,4 @@
-import { sqlite } from '../db.js';
+import { sqlite, hashPhone } from '../db.js';
 
 export interface TelegramSession {
   id: string;
@@ -20,9 +20,10 @@ export const getSession = async (id: string): Promise<TelegramSession | null> =>
 };
 
 export const getActiveSessionByPhone = async (phone: string): Promise<TelegramSession | null> => {
+  const hashedPhone = hashPhone(phone);
   const row = sqlite.query(
     "SELECT * FROM telegram_sessions WHERE phone = ? AND auth_state = 'logged_in'"
-  ).get(phone) as TelegramSession | undefined;
+  ).get(hashedPhone) as TelegramSession | undefined;
   return row || null;
 };
 
@@ -63,7 +64,10 @@ export const deleteSession = async (id: string) => {
 };
 
 export const deleteOtherSessionsByPhone = async (phone: string, currentSessionId: string): Promise<string[]> => {
-  const sessions = sqlite.query('SELECT id FROM telegram_sessions WHERE phone = ? AND id != ?').all(phone, currentSessionId) as {id: string}[];
+  const hashedPhone = hashPhone(phone);
+  const sessions = sqlite.query(
+    'SELECT id FROM telegram_sessions WHERE phone = ? AND id != ?'
+  ).all(hashedPhone, currentSessionId) as {id: string}[];
   const ids = sessions.map(s => s.id);
   
   if (ids.length > 0) {

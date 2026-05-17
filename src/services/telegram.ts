@@ -95,7 +95,9 @@ export const getTelegramClient = async (sessionId: string, connect = true): Prom
 
   const dbSession = await getSession(sessionId);
   if (!dbSession) {
-    throw new Error('Session not found');
+    const error = new Error('Session not found');
+    (error as any).statusCode = 401;
+    throw error;
   }
 
   console.log(`Creating fresh Telegram client for session: ${sessionId}`);
@@ -118,6 +120,23 @@ export const getTelegramClient = async (sessionId: string, connect = true): Prom
 
   clients.set(sessionId, newClient);
   return newClient;
+};
+
+/**
+ * Safely resolve an entity by ID, fetching dialogs if the entity is not in cache
+ */
+export const getEntitySafe = async (sessionId: string, id: number | string): Promise<any> => {
+  const client = await getTelegramClient(sessionId);
+  try {
+    return await client.getInputEntity(id);
+  } catch (err: any) {
+    if (err.message.includes('Could not find the input entity')) {
+      console.log(`Entity ${id} not in cache for session ${sessionId}, fetching dialogs...`);
+      await client.getDialogs({ limit: 50 }); // Populate cache
+      return await client.getInputEntity(id);
+    }
+    throw err;
+  }
 };
 
 /**

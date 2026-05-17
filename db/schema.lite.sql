@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS telegram_index_files (
   phone TEXT NOT NULL,
   folder_id INTEGER NOT NULL,
   message_id INTEGER NOT NULL,
+  peer_id INTEGER NOT NULL DEFAULT 0,
   name TEXT NOT NULL,
   size INTEGER NOT NULL DEFAULT 0,
   mime_type TEXT,

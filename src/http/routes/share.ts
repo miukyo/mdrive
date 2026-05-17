@@ -15,7 +15,7 @@ import archiver from "archiver";
 import { getFiles } from "../../services/drive.js";
 import { sqlite } from "../../db.js";
 import { Readable } from "node:stream";
-import { getTelegramClient } from "../../services/telegram.js";
+import { getTelegramClient, getEntitySafe } from "../../services/telegram.js";
 import { getFileChunks } from "../../repositories/index.js";
 import { Api } from "telegram";
 
@@ -47,8 +47,8 @@ export const shareRouter = new Elysia({ prefix: "/share" })
     headers: t.Object({ "x-session-id": t.String() }),
     body: t.Object({
       share_type: t.Union([t.Literal("file"), t.Literal("folder")], { description: "Type of share" }),
-      folder_id: t.Optional(t.Union([t.Number(), t.String()])),
-      message_id: t.Optional(t.Union([t.Number(), t.String()])),
+      folder_id: t.Optional(t.Union([t.Number(), t.String(), t.Null()])),
+      message_id: t.Optional(t.Union([t.Number(), t.String(), t.Null()])),
     }),
     detail: {
       summary: "Create public share link",
@@ -99,7 +99,7 @@ export const shareRouter = new Elysia({ prefix: "/share" })
       tags: ["Share"],
     }
   })
-  .get("/:token", async ({ params: { token } }) => {
+  .get("/:token", async ({ params: { token }, query: { folder_id } }) => {
     const share = await getShareLink(token);
     if (!share) throw new ApiError(404, "Share link not found");
     if (share.is_active === 0) {
@@ -128,257 +128,63 @@ export const shareRouter = new Elysia({ prefix: "/share" })
         .get(share.phone, share.message_id);
       response.file = file;
     } else if (share.share_type === "folder" && share.folder_id !== null) {
+      let currentFolderId = share.folder_id;
+      
+      // If a subfolder_id is requested, verify it's a descendant of the shared folder
+      if (folder_id) {
+        const requestedId = parseInt(folder_id, 10);
+        if (requestedId !== share.folder_id) {
+          const isDescendant = sqlite.query(`
+            WITH RECURSIVE subordinates AS (
+              SELECT folder_id, parent_id FROM telegram_index_folders WHERE folder_id = ? AND phone = ?
+              UNION ALL
+              SELECT f.folder_id, f.parent_id FROM telegram_index_folders f
+              INNER JOIN subordinates s ON f.folder_id = s.parent_id
+              WHERE f.phone = ?
+            )
+            SELECT COUNT(*) as count FROM subordinates WHERE folder_id = ?
+          `).get(requestedId, share.phone, share.phone, share.folder_id) as { count: number };
+
+          if (isDescendant.count > 0) {
+            currentFolderId = requestedId;
+          } else {
+            throw new ApiError(403, "Access denied to this folder");
+          }
+        }
+      }
+
       const folder = sqlite
         .query(
           "SELECT * FROM telegram_index_folders WHERE phone = ? AND folder_id = ? LIMIT 1",
         )
-        .get(share.phone, share.folder_id);
+        .get(share.phone, currentFolderId);
 
-      const fileCount = sqlite
+      const files = sqlite
         .query(
-          "SELECT COUNT(*) as count FROM telegram_index_files WHERE phone = ? AND folder_id = ?",
+          "SELECT * FROM telegram_index_files WHERE phone = ? AND folder_id = ?",
         )
-        .get(share.phone, share.folder_id) as { count: number };
+        .all(share.phone, currentFolderId);
+
+      const subfolders = sqlite
+        .query(
+          "SELECT * FROM telegram_index_folders WHERE phone = ? AND parent_id = ?",
+        )
+        .all(share.phone, currentFolderId);
 
       response.folder = folder;
-      response.file_count = fileCount.count;
+      response.files = files;
+      response.subfolders = subfolders;
+      response.is_root = currentFolderId === share.folder_id;
     }
 
     return response;
   }, {
     params: t.Object({ token: t.String() }),
-    detail: {
-      summary: "Get share link information",
-      tags: ["Share"],
-    }
-  })
-  .get("/:token/stream", async ({ params: { token }, query, set }) => {
-    const share = await getShareLink(token);
-    if (!share) throw new ApiError(404, "Share link not found");
-    if (share.is_active === 0) {
-      throw new ApiError(403, "This share link has been disabled");
-    }
-    if (share.share_type !== "file" || !share.message_id) {
-      throw new ApiError(400, "Streaming is only available for individual files");
-    }
-
-    const row = sqlite
-      .query(
-        "SELECT id, phone FROM telegram_sessions WHERE phone = ? AND auth_state = 'logged_in' LIMIT 1",
-      )
-      .get(share.phone) as { id: string; phone: string } | undefined;
-    if (!row) {
-      throw new ApiError(500, "User session unavailable to process share");
-    }
-
-    const sessionId = row.id;
-    const phone = row.phone;
-    const client = await getTelegramClient(sessionId);
-    const peer = share.folder_id
-      ? await client.getInputEntity(share.folder_id)
-      : await client.getInputEntity("me");
-
-    const file = sqlite
-      .query(
-        "SELECT * FROM telegram_index_files WHERE phone = ? AND message_id = ? LIMIT 1",
-      )
-      .get(phone, share.message_id) as any;
-
-    if (!file) throw new ApiError(404, "File not found in index");
-
-    if (query.download === "1") {
-      const safeFileName = file.name.replace(/[^\x20-\x7E]/g, "?");
-      const encodedFileName = encodeURIComponent(file.name);
-      set.headers[
-        "Content-Disposition"
-      ] = `attachment; filename="${safeFileName}"; filename*=UTF-8''${encodedFileName}`;
-    }
-    set.headers["Content-Type"] = file.mime_type || "application/octet-stream";
-    set.headers["Accept-Ranges"] = "none";
-
-    const stream = new ReadableStream({
-      async start(controller) {
-        try {
-          const dbChunks = await getFileChunks(
-            phone,
-            share.folder_id ?? 0,
-            share.message_id!,
-          );
-
-          if (dbChunks && dbChunks.length > 0) {
-            const messages = (await client.getMessages(peer, {
-              ids: dbChunks.map((c) => c.message_id),
-            })) as Api.Message[];
-
-            messages.sort((a, b) => {
-              const idxA =
-                dbChunks.find((c) => c.message_id === a.id)?.chunk_index || 0;
-              const idxB =
-                dbChunks.find((c) => c.message_id === b.id)?.chunk_index || 0;
-              return idxA - idxB;
-            });
-
-            for (const msg of messages) {
-              const media = msg.media;
-              if (
-                media instanceof Api.MessageMediaDocument &&
-                media.document instanceof Api.Document
-              ) {
-                const chunkStream = client.iterDownload({
-                  file: media,
-                  requestSize: 1024 * 1024,
-                });
-                for await (const chunk of chunkStream) {
-                  controller.enqueue(chunk);
-                }
-              }
-            }
-           controller.close();
-          } else {
-            const { media } = await getMessageMedia(
-              sessionId,
-              share.folder_id,
-              share.message_id!,
-            );
-            const chunkStream = client.iterDownload({
-              file: media,
-              requestSize: 1024 * 1024,
-            });
-            for await (const chunk of chunkStream) {
-              controller.enqueue(chunk);
-            }
-            controller.close();
-          }
-        } catch (err) {
-          controller.error(err);
-        }
-      },
-    });
-
-    return new Response(stream, { headers: set.headers as any });
-  }, {
-    params: t.Object({ token: t.String() }),
     query: t.Object({
-      download: t.Optional(t.String({ description: "Set to '1' to trigger file download" })),
+      folder_id: t.Optional(t.String({ description: "Subfolder ID to browse" })),
     }),
     detail: {
-      summary: "Stream shared file",
-      tags: ["Share"],
-    }
-  })
-  .get("/:token/zip", async ({ params: { token }, set }) => {
-    const share = await getShareLink(token);
-    if (!share) throw new ApiError(404, "Share link not found");
-    if (share.is_active === 0) {
-      throw new ApiError(403, "This share link has been disabled");
-    }
-
-    if (share.share_type !== "folder") {
-      throw new ApiError(400, "Download as ZIP is only available for folders");
-    }
-
-    const row = sqlite
-      .query(
-        "SELECT id FROM telegram_sessions WHERE phone = ? AND auth_state = 'logged_in' LIMIT 1",
-      )
-      .get(share.phone) as { id: string } | undefined;
-    if (!row) {
-      throw new ApiError(500, "User session unavailable to process share");
-    }
-
-    const sessionId = row.id;
-    const client = await getTelegramClient(sessionId);
-    const peer = share.folder_id
-      ? await client.getInputEntity(share.folder_id)
-      : await client.getInputEntity("me");
-
-    const files = await getFiles(
-      sessionId,
-      share.folder_id === 0 ? null : share.folder_id,
-    );
-
-    set.headers["Content-Type"] = "application/zip";
-    set.headers[
-      "Content-Disposition"
-    ] = `attachment; filename="shared_folder_${token.slice(0, 8)}.zip"`;
-
-    const archive = archiver("zip", { zlib: { level: 9 } });
-
-    const stream = new ReadableStream({
-      start(controller) {
-        archive.on("data", (chunk) => controller.enqueue(chunk));
-        archive.on("end", () => controller.close());
-        archive.on("error", (err) => controller.error(err));
-
-        (async () => {
-          for (const fileMeta of files) {
-            try {
-              const dbChunks = await getFileChunks(
-                share.phone,
-                share.folder_id ?? 0,
-                fileMeta.id,
-              );
-
-              if (dbChunks && dbChunks.length > 0) {
-                const messages = (await client.getMessages(peer, {
-                  ids: dbChunks.map((c) => c.message_id),
-                })) as Api.Message[];
-
-                messages.sort((a, b) => {
-                  const idxA =
-                    dbChunks.find((c) => c.message_id === a.id)?.chunk_index || 0;
-                  const idxB =
-                    dbChunks.find((c) => c.message_id === b.id)?.chunk_index || 0;
-                  return idxA - idxB;
-                });
-
-                async function* streamMultipleMessages() {
-                  for (const msg of messages) {
-                    const media = msg.media;
-                    if (
-                      media instanceof Api.MessageMediaDocument &&
-                      media.document instanceof Api.Document
-                    ) {
-                      const chunkStream = client.iterDownload({
-                        file: media,
-                        requestSize: 1024 * 1024,
-                      });
-                      for await (const chunk of chunkStream) {
-                        yield chunk;
-                      }
-                    }
-                  }
-                }
-
-                archive.append(Readable.from(streamMultipleMessages()), {
-                  name: fileMeta.name,
-                });
-              } else {
-                const { media } = await getMessageMedia(
-                  sessionId,
-                  share.folder_id === 0 ? null : share.folder_id,
-                  fileMeta.id,
-                );
-                const chunkStream = client.iterDownload({
-                  file: media,
-                  requestSize: 1024 * 1024,
-                });
-                archive.append(Readable.from(chunkStream), { name: fileMeta.name });
-              }
-            } catch (e) {
-              console.error(`Failed to append file ${fileMeta.id} to ZIP`, e);
-            }
-          }
-          await archive.finalize();
-        })();
-      },
-    });
-
-    return new Response(stream, { headers: set.headers as any });
-  }, {
-    params: t.Object({ token: t.String() }),
-    detail: {
-      summary: "Download shared folder as ZIP",
+      summary: "Get share link information",
       tags: ["Share"],
     }
   });

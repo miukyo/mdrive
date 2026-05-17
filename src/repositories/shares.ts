@@ -45,3 +45,68 @@ export const findExistingShareLink = async (phone: string, shareType: string, fo
   ).get(phone, shareType, folderId, folderId, messageId, messageId) as { token: string } | undefined;
   return row?.token || null;
 };
+
+export const deleteSharesByFiles = async (phone: string, messageIds: number[]) => {
+  if (messageIds.length === 0) return;
+  const placeholders = messageIds.map(() => '?').join(',');
+  sqlite.query(
+    `DELETE FROM telegram_share_links 
+     WHERE phone = ? AND share_type = 'file' 
+     AND message_id IN (${placeholders})`
+  ).run(phone, ...messageIds);
+};
+
+export const deleteShareByFolder = async (phone: string, folderId: number) => {
+  // Use a CTE to find all subfolders recursively and delete their shares too
+  sqlite.query(
+    `DELETE FROM telegram_share_links 
+     WHERE phone = ? AND share_type = 'folder' 
+     AND folder_id IN (
+       WITH RECURSIVE subordinates AS (
+         SELECT folder_id FROM telegram_index_folders WHERE folder_id = ? AND phone = ?
+         UNION ALL
+         SELECT f.folder_id FROM telegram_index_folders f
+         INNER JOIN subordinates s ON f.parent_id = s.folder_id
+         WHERE f.phone = ?
+       )
+       SELECT folder_id FROM subordinates
+     )`
+  ).run(phone, folderId, phone, phone);
+};
+
+export const deleteSharesByFolderFiles = async (phone: string, folderId: number) => {
+  // Delete all file shares that belong to any folder in the hierarchy
+  sqlite.query(
+    `DELETE FROM telegram_share_links 
+     WHERE phone = ? AND share_type = 'file' 
+     AND folder_id IN (
+       WITH RECURSIVE subordinates AS (
+         SELECT folder_id FROM telegram_index_folders WHERE folder_id = ? AND phone = ?
+         UNION ALL
+         SELECT f.folder_id FROM telegram_index_folders f
+         INNER JOIN subordinates s ON f.parent_id = s.folder_id
+         WHERE f.phone = ?
+       )
+       SELECT folder_id FROM subordinates
+     )`
+  ).run(phone, folderId, phone, phone);
+};
+
+export const moveShares = async (phone: string, mappings: Record<number, number>, toFolderId: number | null) => {
+  const oldIds = Object.keys(mappings).map(Number);
+  if (oldIds.length === 0) return;
+
+  const targetFolder = (toFolderId === 0 || toFolderId === null) ? null : toFolderId;
+  const query = sqlite.prepare(
+    `UPDATE telegram_share_links 
+     SET message_id = ?, folder_id = ? 
+     WHERE phone = ? AND share_type = 'file' AND message_id = ?`
+  );
+
+  for (const oldId of oldIds) {
+    const newId = mappings[oldId];
+    if (newId) {
+      query.run(newId, targetFolder, phone, oldId);
+    }
+  }
+};

@@ -4,30 +4,26 @@ import {
   Description,
   Dropdown,
   Header,
-  IconPlus,
   IconSearch,
   Label,
   Separator,
-  Surface,
 } from "@heroui/react";
-import React, { useEffect, useCallback, useRef, useMemo } from "react";
-import { flushSync } from "react-dom";
+import React, { useEffect, useRef, useMemo } from "react";
+
 import { useShallow } from "zustand/react/shallow";
-import { useAuthStore } from "../stores/Auth.store";
+import { useAuthStore, API_BASE_URL } from "../stores/Auth.store";
 import { useFilesStore } from "../stores/Files.store";
-import { useIndexStore } from "../stores/Index.store";
 import { useProgressStore } from "../stores/Progress.store";
 import {
-  IconBoxMultiple,
+  IconArchiveFilled,
   IconBoxMultipleFilled,
   IconCategoryFilled,
   IconLogout,
   IconMoonStars,
-  IconPaperclip,
   IconPhotoFilled,
   IconSettingsFilled,
   IconSun,
-  IconTrashFilled,
+  IconUpload,
   IconUserPlus,
 } from "@tabler/icons-react";
 import { Route, useLocation } from "wouter";
@@ -35,37 +31,9 @@ import Home from "./Dashboard/Home";
 import GlobalPreview from "../components/GlobalPreview";
 import Gallery from "./Dashboard/Gallery";
 import Shared from "./Dashboard/Shared";
-
-interface NavButtonProps {
-  icon: React.ReactNode;
-  label: string;
-  onClick?: () => void;
-  variant?: "primary" | "ghost" | "tertiary" | "secondary";
-  className?: string;
-}
-
-const NavButton = ({
-  icon,
-  label,
-  onClick,
-  variant = "ghost",
-  className = "",
-}: NavButtonProps) => {
-  const isActive = variant === "primary";
-  return (
-    <Button
-      size="lg"
-      variant={variant}
-      onClick={onClick}
-      className={`p-8 hover:shadow-background transition-all gap-0 rounded-2xl group ${isActive ? "" : "[&>svg,&>span]:opacity-70"} ${className}`}
-    >
-      {icon}
-      <span className="group-hover:ml-2 max-w-0 group-hover:max-w-40 opacity-0 group-hover:opacity-100 transition-all duration-300 ease-in-out overflow-hidden whitespace-nowrap">
-        {label}
-      </span>
-    </Button>
-  );
-};
+import Explorer from "./Dashboard/Explorer";
+import SearchModal from "../components/SearchModal";
+import { useThemeStore } from "../stores/Theme.store";
 
 export default function Dashboard() {
   const { user, sessions, sessionId, logout, switchSession } = useAuthStore(
@@ -85,24 +53,11 @@ export default function Dashboard() {
   const otherSessions = useMemo(() => {
     return sessions.filter((s) => s.id !== sessionId);
   }, [sessions, sessionId]);
-  const [isDark, setIsDark] = React.useState(() => {
-    const saved = localStorage.getItem("theme");
-    if (saved) return saved === "dark";
-    return window.matchMedia("(prefers-color-scheme: dark)").matches;
-  });
-
-  useEffect(() => {
-    if (isDark) {
-      document.documentElement.classList.add("dark");
-      localStorage.setItem("theme", "dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-      localStorage.setItem("theme", "light");
-    }
-  }, [isDark]);
+  const [isSearchOpen, setIsSearchOpen] = React.useState(false);
+  const { theme: isDark, toggleTheme: toggleThemeStore } = useThemeStore();
 
   const toggleTheme = () => {
-    setIsDark((prev) => !prev);
+    toggleThemeStore();
   };
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -126,78 +81,97 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="flex h-screen gap-1 overflow-y-scroll px-2">
-      <div className="w-20 flex flex-col gap-2 z-10 sticky left-0 top-0 pt-2">
-        <div className="flex flex-col gap-1">
-          <input
-            type="file"
-            multiple
-            className="hidden"
-            ref={fileInputRef}
-            onChange={handleUpload}
-          />
-          <Button
-            size="lg"
-            variant="tertiary"
-            className="p-8 justify-start rounded-full group"
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <IconPlus className="size-5" />
-          </Button>
-          <NavButton
-            icon={<IconCategoryFilled className="size-5" />}
-            label="Home"
-            variant={location === "/" ? "primary" : "ghost"}
-            onClick={() => navigate("/")}
-          />
-          <NavButton
-            icon={<IconPhotoFilled className="size-5" />}
-            label="Gallery"
-            variant={location === "/gallery" ? "primary" : "ghost"}
-            onClick={() => navigate("/gallery")}
-          />
-          <NavButton
-            icon={<IconBoxMultipleFilled className="size-5" />}
-            label="Shared"
-            variant={location === "/shared" ? "primary" : "ghost"}
-            onClick={() => navigate("/shared")}
-          />
-          <NavButton
-            icon={<IconTrashFilled className="size-5" />}
-            label="Trash"
-            variant={location === "/trash" ? "primary" : "ghost"}
-            onClick={() => navigate("/trash")}
-          />
-        </div>
-      </div>
-      <div className="flex-1">
-        <div className="h-16 sticky top-2 z-10">
-          <div className="h-full flex items-center justify-between">
-            <Button
-              size="lg"
-              variant="tertiary"
-              className="p-8 justify-start rounded-full"
-            >
-              <IconSearch className="size-5" />
-              Search
-            </Button>
-            <div className="flex items-center gap-1">
+    <div className="flex w-full h-screen gap-1 overflow-hidden">
+      <div
+        className="flex-1 overflow-y-scroll h-full"
+        style={{
+          scrollbarGutter: "stable both-edges",
+        }}
+      >
+        <div className="sticky top-0 z-50 isolate px-2">
+          <div className="bg-linear-to-b from-background to-transparent h-full py-2 flex justify-between gap-2 max-sm:gap-1 overflow-x-auto no-scrollbar max-sm:justify-start max-sm:flex-nowrap w-full">
+            <div className="flex gap-1 max-sm:contents">
+              <input
+                type="file"
+                multiple
+                className="hidden"
+                ref={fileInputRef}
+                onChange={handleUpload}
+              />
+              <Button
+                size="lg"
+                variant="tertiary"
+                className="p-8 max-sm:p-3.5 justify-start group max-md:rounded-full"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <IconUpload className="size-5" />
+              </Button>
+
+              <Button
+                size="lg"
+                className="p-8 max-sm:p-3.5 justify-start rounded-full"
+                variant={location === "/" ? "primary" : "ghost"}
+                onClick={() => navigate("/")}
+              >
+                <IconCategoryFilled className="size-5" />
+                <span className="hidden xl:inline">Home</span>
+              </Button>
+              <Button
+                size="lg"
+                className="p-8 max-sm:p-3.5 justify-start rounded-full"
+                variant={location === "/explorer" ? "primary" : "ghost"}
+                onClick={() => navigate("/explorer")}
+              >
+                <IconArchiveFilled className="size-5" />
+                <span className="hidden xl:inline">Explorer</span>
+              </Button>
+              <Button
+                size="lg"
+                className="p-8 max-sm:p-3.5 justify-start rounded-full"
+                variant={location === "/gallery" ? "primary" : "ghost"}
+                onClick={() => navigate("/gallery")}
+              >
+                <IconPhotoFilled className="size-5" />
+                <span className="hidden xl:inline">Gallery</span>
+              </Button>
+
+              <Button
+                size="lg"
+                className="p-8 max-sm:p-3.5 justify-start rounded-full"
+                variant={location === "/shared" ? "primary" : "ghost"}
+                onClick={() => navigate("/shared")}
+              >
+                <IconBoxMultipleFilled className="size-5" />
+                <span className="hidden xl:inline">Shared</span>
+              </Button>
+            </div>
+
+            <div className="flex gap-1 max-sm:contents">
+              <Button
+                size="lg"
+                variant="tertiary"
+                className="p-8 max-sm:p-3.5 justify-start rounded-full"
+                onClick={() => setIsSearchOpen(true)}
+              >
+                <IconSearch className="size-5" />
+                <span className="hidden xl:inline">Search</span>
+              </Button>
               <Dropdown>
                 <Button
                   size="lg"
                   variant="tertiary"
-                  className="p-3 pr-8 py-8 rounded-l-4xl rounded-r-xl! justify-start text-left text-lg min-w-[200px]"
+                  className="p-3 py-4 xl:pr-8 sm:py-8 rounded-l-4xl rounded-r-xl! justify-start text-left text-lg min-w-max xl:min-w-[200px]"
                 >
-                  <Avatar size="md">
+                  <Avatar size="md" className="max-sm:size-8 max-sm:min-w-8">
                     <Avatar.Image
                       alt={user?.firstName || ""}
-                      src="https://heroui-assets.nyc3.cdn.digitaloceanspaces.com/avatars/blue.jpg"
+                      src={`${API_BASE_URL}/auth/avatar?session_id=${sessionId}`}
                     />
                     <Avatar.Fallback>
                       {user?.firstName?.charAt(0)}
                     </Avatar.Fallback>
                   </Avatar>
-                  <div className="flex flex-col">
+                  <div className="flex flex-col hidden xl:flex">
                     <Label>{user?.firstName}</Label>
                     <Description>@{user.username}</Description>
                   </div>
@@ -229,7 +203,7 @@ export default function Dashboard() {
                           <Avatar size="md">
                             <Avatar.Image
                               alt={user?.firstName || ""}
-                              src="https://heroui-assets.nyc3.cdn.digitaloceanspaces.com/avatars/blue.jpg"
+                              src={`${API_BASE_URL}/auth/avatar?session_id=${sessionId}`}
                             />
                             <Avatar.Fallback>
                               {user?.firstName?.charAt(0)}
@@ -256,6 +230,10 @@ export default function Dashboard() {
                             >
                               <div className="flex items-center gap-3">
                                 <Avatar size="sm" className="size-8">
+                                  <Avatar.Image
+                                    alt={session.user.firstName || ""}
+                                    src={`${API_BASE_URL}/auth/avatar?session_id=${session.id}`}
+                                  />
                                   <Avatar.Fallback>
                                     {session.user.firstName?.charAt(0)}
                                   </Avatar.Fallback>
@@ -297,7 +275,7 @@ export default function Dashboard() {
                 <Button
                   size="lg"
                   variant="tertiary"
-                  className="p-8 justify-start rounded-r-4xl rounded-l-xl"
+                  className="p-8 max-sm:p-3.5 justify-start rounded-r-4xl rounded-l-xl"
                 >
                   <IconSettingsFilled className="size-5" />
                 </Button>
@@ -324,18 +302,24 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
-        <Route path="/">
-          <Home />
-        </Route>
-        <Route path="/gallery">
-          <Gallery />
-        </Route>
-        <Route path="/shared">
-          <Shared />
-        </Route>
-        <Route path="/trash">trash</Route>
+
+        <div className="p-4">
+          <Route path="/">
+            <Home />
+          </Route>
+          <Route path="/gallery">
+            <Gallery />
+          </Route>
+          <Route path="/shared">
+            <Shared />
+          </Route>
+          <Route path="/explorer">
+            <Explorer />
+          </Route>
+        </div>
       </div>
       <GlobalPreview />
+      <SearchModal isOpen={isSearchOpen} onOpenChange={setIsSearchOpen} />
     </div>
   );
 }

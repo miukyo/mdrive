@@ -73,6 +73,8 @@ export default function ImagePlayer({
   return (
     <div
       ref={containerRef}
+      role="button"
+      tabIndex={0}
       className="group relative size-full overflow-hidden flex items-center justify-center bg-black/10"
       style={{
         cursor: scale > 1 ? (isDragging ? "grabbing" : "grab") : "default",
@@ -81,6 +83,11 @@ export default function ImagePlayer({
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          if (onClose) onClose();
+        }
+      }}
       onClick={(e) => {
         if (e.target === containerRef.current && onClose) {
           onClose();
