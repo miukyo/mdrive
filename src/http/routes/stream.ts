@@ -177,6 +177,19 @@ export const streamRouter = new Elysia({ prefix: "/stream" })
         if (attr instanceof Api.DocumentAttributeFilename) {
           fileName = attr.fileName;
         }
+      } else if (media instanceof Api.MessageMediaPhoto && media.photo instanceof Api.Photo) {
+        const photo = media.photo;
+        const largest = photo.sizes.find(s => s instanceof Api.PhotoSize && s.type === 'w')
+          || photo.sizes.find(s => s instanceof Api.PhotoSize && s.type === 'y')
+          || photo.sizes.filter(s => s instanceof Api.PhotoSize).pop();
+        if (largest instanceof Api.PhotoSize) {
+          totalSize = largest.size;
+        }
+        mimeType = "image/jpeg";
+        fileName = messages[0].message ? (messages[0].message.includes("[TD_META]") ? messages[0].message.split("[TD_META]")[0].trim() : messages[0].message) : `Photo_${messages[0].id}.jpg`;
+        if (!fileName.toLowerCase().endsWith(".jpg") && !fileName.toLowerCase().endsWith(".jpeg")) {
+          fileName += ".jpg";
+        }
       } else {
         throw new ApiError(400, "Unsupported media type");
       }
@@ -217,15 +230,33 @@ export const streamRouter = new Elysia({ prefix: "/stream" })
       let currentGlobalOffset = 0;
       for (const msg of messages) {
         const media = msg.media;
-        if (
-          !(
-            media instanceof Api.MessageMediaDocument &&
-            media.document instanceof Api.Document
-          )
-        )
-          continue;
+        let chunkSize = 0;
+        let fileToDownload: any = null;
 
-        const chunkSize = Number(media.document.size);
+        if (
+          media instanceof Api.MessageMediaDocument &&
+          media.document instanceof Api.Document
+        ) {
+          chunkSize = Number(media.document.size);
+          fileToDownload = media;
+        } else if (media instanceof Api.MessageMediaPhoto && media.photo instanceof Api.Photo) {
+          const photo = media.photo;
+          const largest = photo.sizes.find(s => s instanceof Api.PhotoSize && s.type === 'w')
+            || photo.sizes.find(s => s instanceof Api.PhotoSize && s.type === 'y')
+            || photo.sizes.filter(s => s instanceof Api.PhotoSize).pop();
+          if (largest instanceof Api.PhotoSize) {
+            chunkSize = largest.size;
+            fileToDownload = new Api.InputPhotoFileLocation({
+              id: photo.id,
+              accessHash: photo.accessHash,
+              fileReference: photo.fileReference,
+              thumbSize: largest.type,
+            });
+          }
+        }
+
+        if (!fileToDownload) continue;
+
         const chunkEnd = currentGlobalOffset + chunkSize - 1;
 
         if (currentGlobalOffset <= end && chunkEnd >= start) {
@@ -235,7 +266,7 @@ export const streamRouter = new Elysia({ prefix: "/stream" })
 
           if (bytesToRead > 0) {
             const chunkStream = client.iterDownload({
-              file: media,
+              file: fileToDownload,
               offset: bigInt(localStart),
               requestSize: 1024 * 1024,
             });

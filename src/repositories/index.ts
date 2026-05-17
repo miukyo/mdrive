@@ -1,5 +1,6 @@
 import { sqlite } from '../db.js';
 import { FileMetadata, FolderMetadata } from '../models.js';
+import path from 'node:path';
 
 export const saveFolderIndex = async (phone: string, folder: FolderMetadata) => {
   sqlite.query(
@@ -228,10 +229,11 @@ export const getUserFullIndex = async (phone: string) => {
 };
 
 export const renameFile = async (phone: string, folderId: number, messageId: number, newName: string) => {
+  const fileExt = path.extname(newName).slice(1) || null;
   sqlite.query(
-    `UPDATE telegram_index_files SET name = ?, indexed_at = CURRENT_TIMESTAMP 
+    `UPDATE telegram_index_files SET name = ?, file_ext = ?, indexed_at = CURRENT_TIMESTAMP 
      WHERE phone = ? AND folder_id = ? AND message_id = ?`
-  ).run(newName, phone, folderId || 0, messageId);
+  ).run(newName, fileExt, phone, folderId || 0, messageId);
 };
 
 export const getFileChunks = async (phone: string, folderId: number, messageId: number) => {

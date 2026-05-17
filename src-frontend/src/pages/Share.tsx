@@ -203,23 +203,7 @@ export default function Share() {
       {/* Main Content Area */}
       <div className="size-full flex flex-col items-center justify-start overflow-y-auto">
         {data.share_type === "folder" && !selectedFile ? (
-          <div className="w-full flex flex-col gap-8 pt-32 px-20">
-            {/* <div className="flex flex-col items-center gap-4 text-center mt-8">
-              <div className="p-8 rounded-full bg-blue-500/10 border border-blue-500/20">
-                <IconFolder className="size-16 text-blue-500" />
-              </div>
-              <div className="flex flex-col gap-1">
-                <h2 className="text-3xl font-semibold text-white tracking-tight">
-                  {folder?.name}
-                </h2>
-                <p className="text-white/40 text-sm">
-                  {data.is_owner_online
-                    ? "Owner is online"
-                    : "Owner is offline"}
-                </p>
-              </div>
-            </div> */}
-
+          <div className="w-full flex flex-col gap-8 pt-32 px-4 xl:px-20">
             <FileBrowser
               mode="readonly"
               files={files.map((f: any) => ({ ...f, id: f.message_id }))}
@@ -251,7 +235,7 @@ export default function Share() {
                 }
               />
             ) : (selectedFile || file)?.mime_type?.includes("video") ? (
-              <div className="size-full flex items-center justify-center p-6 md:p-12">
+              <div className="size-full flex items-center justify-center">
                 <VideoPlayer
                   src={
                     selectedFile ? getFileStreamUrl(selectedFile) : streamUrl

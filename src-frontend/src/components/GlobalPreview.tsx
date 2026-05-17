@@ -26,7 +26,7 @@ export default function GlobalPreview() {
     open: openFile,
     fileList,
   } = usePreviewStore();
-  const { getStreamUrl } = useStreamStore();
+  const { getStreamUrl, getThumbnailUrl } = useStreamStore();
   const { files: allFiles } = useIndexStore();
 
   const [isMediaLoading, setIsMediaLoading] = useState(true);
@@ -163,11 +163,24 @@ export default function GlobalPreview() {
                     className="text-black bg-white"
                     onPress={() => {
                       if (!selectedFile) return;
-                      const url = new URL(
-                        getStreamUrl(selectedFile.id, selectedFile.folder_id),
-                      );
-                      url.searchParams.append("download", "1");
-                      window.open(url.toString(), "_blank");
+                      const url =
+                        selectedFile.size === -1
+                          ? getThumbnailUrl(
+                              selectedFile.id,
+                              selectedFile.folder_id,
+                              selectedFile.peer_id,
+                            )
+                          : (() => {
+                              const u = new URL(
+                                getStreamUrl(
+                                  selectedFile.id,
+                                  selectedFile.folder_id,
+                                ),
+                              );
+                              u.searchParams.append("download", "1");
+                              return u.toString();
+                            })();
+                      window.open(url, "_blank");
                     }}
                   >
                     Download

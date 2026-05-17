@@ -201,9 +201,11 @@ export const useFilesStore = create<Store>()((set) => ({
       };
 
     // Update store locally
+    const lastDot = newName.lastIndexOf(".");
+    const ext = lastDot > 0 && lastDot < newName.length - 1 ? newName.substring(lastDot + 1) : null;
     useIndexStore.setState((state) => ({
       files: state.files.map((f) =>
-        f.id === messageId ? { ...f, name: newName } : f,
+        f.id === messageId ? { ...f, name: newName, file_ext: ext } : f,
       ),
     }));
 

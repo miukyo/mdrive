@@ -7,6 +7,7 @@ import {
 } from "@tabler/icons-react";
 
 export const formatSize = (bytes: number) => {
+  if (bytes === -1 || bytes === undefined) return "Unknown";
   if (!bytes || bytes === 0) return "0 B";
   const k = 1024;
   const sizes = ["B", "KB", "MB", "GB", "TB"];

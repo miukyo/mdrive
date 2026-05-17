@@ -43,9 +43,7 @@ const FileBrowser = React.memo(
     isRoot = true,
     height = "100%",
   }: FileBrowserProps) => {
-    const [viewMode, setViewMode] = useState<"table" | "grid">(
-      mode === "admin" ? "grid" : "table",
-    );
+    const [viewMode, setViewMode] = useState<"table" | "grid">("grid");
     const isAdmin = mode === "admin";
 
     // Stores (only used in admin mode)
@@ -217,10 +215,18 @@ const FileBrowser = React.memo(
           }
         } else {
           let url = "";
-          if (isAdmin) {
-            url = `${API_BASE_URL}/stream?message_id=${item.id}${item.folder_id ? `&folder_id=${item.folder_id}` : ""}&download=1&session_id=${sessionId}`;
-          } else if (shareToken) {
-            url = `${API_BASE_URL}/stream?share_token=${shareToken}&message_id=${item.id}${item.folder_id ? `&folder_id=${item.folder_id}` : ""}&download=1`;
+          if (item.size === -1) {
+            if (isAdmin) {
+              url = `${API_BASE_URL}/thumbnail?message_id=${item.id}${item.folder_id ? `&folder_id=${item.folder_id}` : ""}${item.peer_id ? `&peer_id=${item.peer_id}` : ""}&session_id=${sessionId}`;
+            } else if (shareToken) {
+              url = `${API_BASE_URL}/thumbnail?share_token=${shareToken}&message_id=${item.id}${item.folder_id ? `&folder_id=${item.folder_id}` : ""}${item.peer_id ? `&peer_id=${item.peer_id}` : ""}`;
+            }
+          } else {
+            if (isAdmin) {
+              url = `${API_BASE_URL}/stream?message_id=${item.id}${item.folder_id ? `&folder_id=${item.folder_id}` : ""}&download=1&session_id=${sessionId}`;
+            } else if (shareToken) {
+              url = `${API_BASE_URL}/stream?share_token=${shareToken}&message_id=${item.id}${item.folder_id ? `&folder_id=${item.folder_id}` : ""}&download=1`;
+            }
           }
           if (url) window.open(url, "_blank");
         }

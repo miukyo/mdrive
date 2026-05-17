@@ -208,16 +208,43 @@ export const getFiles = async (
       const doc = msg.media.document;
       if (doc instanceof Api.Document) {
         let name = msg.message || "";
-        const meta = extractMetadata(name);
+        let meta = extractMetadata(name);
 
-        if (meta) {
-          name = meta.n || name;
-        } else if (!name) {
+        if (!meta) {
+          let filename = "";
           for (const attr of doc.attributes) {
             if (attr instanceof Api.DocumentAttributeFilename) {
-              name = attr.fileName;
+              filename = attr.fileName;
             }
           }
+          if (!filename) filename = name || `file_${msg.id}`;
+
+          const size = Number(doc.size);
+          meta = {
+            n: filename,
+            s: size,
+            cid: undefined,
+            idx: 0,
+            tot: 1,
+          };
+          name = filename;
+
+          const newCaption = `${filename} [TD_META]${JSON.stringify(meta)}[/TD_META]`;
+          try {
+            await invokeQueued(
+              sessionId,
+              new Api.messages.EditMessage({
+                peer,
+                id: msg.id,
+                message: newCaption,
+              })
+            );
+            console.log(`Added metadata to manual message ID ${msg.id}`);
+          } catch (e) {
+            console.warn(`Failed to add metadata to message ID ${msg.id}:`, e);
+          }
+        } else {
+          name = meta.n || name;
         }
 
         if (!name) name = "Unknown";
@@ -247,7 +274,7 @@ export const getFiles = async (
         folder_id: folderId,
         peer_id: peerId,
         name: msg.message || "Photo.jpg",
-        size: 0,
+        size: -1, // Use -1 for unknown size
         mime_type: "image/jpeg",
         file_ext: "jpg",
         created_at: new Date(msg.date * 1000).toISOString(),

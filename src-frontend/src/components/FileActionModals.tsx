@@ -41,22 +41,28 @@ export const FileActionModals = ({
   onBulkDelete,
   isActionLoading: externalLoading = false,
 }: FileActionModalsProps) => {
-  const { name = "", extension: ext = "" } = React.useMemo(() => {
-    if (!selectedFile) return { name: "", extension: "" };
-    const lastDot = selectedFile.name.lastIndexOf(".");
-    if (lastDot > 0 && lastDot < selectedFile.name.length - 1) {
-      return {
-        name: selectedFile.name.substring(0, lastDot),
-        extension: selectedFile.name.substring(lastDot),
-      };
-    }
-    return { name: selectedFile.name, extension: "" };
-  }, [selectedFile]);
-
-  const [newName, setNewName] = useState(name);
-  const [extension, setExtension] = useState(ext);
+  const [newName, setNewName] = useState("");
+  const [extension, setExtension] = useState("");
   const [folderName, setFolderName] = useState("");
   const [isActionLoading, setIsActionLoading] = useState(false);
+
+  React.useEffect(() => {
+    if (isRenameOpen && selectedFile) {
+      if (selectedFile.isFolder) {
+        setNewName(selectedFile.name);
+        setExtension("");
+      } else {
+        const lastDot = selectedFile.name.lastIndexOf(".");
+        if (lastDot > 0 && lastDot < selectedFile.name.length - 1) {
+          setNewName(selectedFile.name.substring(0, lastDot));
+          setExtension(selectedFile.name.substring(lastDot));
+        } else {
+          setNewName(selectedFile.name);
+          setExtension("");
+        }
+      }
+    }
+  }, [isRenameOpen, selectedFile]);
 
   const isLoading = isActionLoading || externalLoading;
 
