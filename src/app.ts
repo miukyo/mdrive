@@ -14,30 +14,35 @@ import { shareRouter } from "./http/routes/share.js";
 import { transfersRouter } from "./http/routes/transfers.js";
 import { thumbnailRouter } from "./http/routes/thumbnail.js";
 
-export const app = new Elysia()
-  .use(cors({ origin: config.CORS_ORIGIN }))
-  .use(
-    swagger({
-      path: "/docs",
-      provider: "scalar",
-      documentation: {
-        info: {
-          title: "Telegram Drive API",
-          version: "2.0.0",
-          description: "High-performance Telegram-based cloud storage API built with Elysia and Bun.",
-        },
-        tags: [
-          { name: "Auth", description: "Authentication and session management" },
-          { name: "Folders", description: "Folder creation and management" },
-          { name: "Files", description: "File upload, download, and management" },
-          { name: "Stream", description: "Media streaming with range support" },
-          { name: "Index", description: "Search and storage statistics" },
-          { name: "Share", description: "Public sharing and ZIP generation" },
-          { name: "Transfers", description: "Real-time progress monitoring (SSE)" },
-        ],
-      },
-    }),
-  )
+const baseApp = new Elysia()
+  .use(cors({ origin: config.CORS_ORIGIN }));
+
+export const app = (
+  process.env.NODE_ENV === "production"
+    ? baseApp
+    : baseApp.use(
+        swagger({
+          path: "/docs",
+          provider: "scalar",
+          documentation: {
+            info: {
+              title: "Telegram Drive API",
+              version: "2.0.0",
+              description: "High-performance Telegram-based cloud storage API built with Elysia and Bun.",
+            },
+            tags: [
+              { name: "Auth", description: "Authentication and session management" },
+              { name: "Folders", description: "Folder creation and management" },
+              { name: "Files", description: "File upload, download, and management" },
+              { name: "Stream", description: "Media streaming with range support" },
+              { name: "Index", description: "Search and storage statistics" },
+              { name: "Share", description: "Public sharing and ZIP generation" },
+              { name: "Transfers", description: "Real-time progress monitoring (SSE)" },
+            ],
+          },
+        }),
+      )
+)
   .use(staticPlugin({ 
     assets: path.resolve(process.cwd(), "dist-frontend"), 
     prefix: "/" 
