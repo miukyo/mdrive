@@ -19,12 +19,12 @@ import { hashPhone } from "../../db.js";
 export const authRouter = new Elysia({ prefix: "/auth" })
   .post(
     "/send-code",
-    async ({ body: { phone, force_sms, pin } }) => {
+    async ({ body: { phone, force_sms, pin, mode = "login" } }) => {
       if (!phone) {
         throw new ApiError(400, "phone is required");
       }
 
-      if (!force_sms) {
+      if (mode === "login" && !force_sms) {
         const existing = await getActiveSessionByPhone(phone);
 
         // If we have an active session with a PIN, handle quick login
@@ -87,6 +87,9 @@ export const authRouter = new Elysia({ prefix: "/auth" })
         force_sms: t.Optional(t.Boolean({ default: false })),
         pin: t.Optional(
           t.String({ description: "Optional PIN for quick login" }),
+        ),
+        mode: t.Optional(
+          t.Union([t.Literal("login"), t.Literal("register")])
         ),
       }),
       detail: {

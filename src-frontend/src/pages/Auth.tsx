@@ -104,17 +104,21 @@ const LoginForm = ({ setMode }: { setMode: setModeFunction }) => {
 
 type RegisterState = {
   pinMode: boolean;
+  passwordMode: boolean;
   phone: string;
   pin: string;
   otp: string;
+  password: string;
   error: string | null;
 };
 
 type RegisterAction =
   | { type: "SET_PIN_MODE"; payload: boolean }
+  | { type: "SET_PASSWORD_MODE"; payload: boolean }
   | { type: "SET_PHONE"; payload: string }
   | { type: "SET_PIN"; payload: string }
   | { type: "SET_OTP"; payload: string }
+  | { type: "SET_PASSWORD"; payload: string }
   | { type: "SET_ERROR"; payload: string | null };
 
 function registerReducer(
@@ -124,12 +128,16 @@ function registerReducer(
   switch (action.type) {
     case "SET_PIN_MODE":
       return { ...state, pinMode: action.payload };
+    case "SET_PASSWORD_MODE":
+      return { ...state, passwordMode: action.payload };
     case "SET_PHONE":
       return { ...state, phone: action.payload };
     case "SET_PIN":
       return { ...state, pin: action.payload };
     case "SET_OTP":
       return { ...state, otp: action.payload };
+    case "SET_PASSWORD":
+      return { ...state, password: action.payload };
     case "SET_ERROR":
       return { ...state, error: action.payload };
     default:
@@ -140,17 +148,20 @@ function registerReducer(
 const RegisterForm = ({ setMode }: { setMode: setModeFunction }) => {
   const [state, dispatch] = useReducer(registerReducer, {
     pinMode: false,
+    passwordMode: false,
     phone: "",
     pin: "",
     otp: "",
+    password: "",
     error: null,
   });
 
   const [otpSent, setOtpSent] = useState(0);
 
-  const { pinMode, phone, pin, otp, error } = state;
+  const { pinMode, passwordMode, phone, pin, otp, password, error } = state;
   const {
     register,
+    login2fa,
     sendOtp,
     setPin: setPinStore,
     completeRegistration,
@@ -172,6 +183,7 @@ const RegisterForm = ({ setMode }: { setMode: setModeFunction }) => {
           type: "SET_ERROR",
           payload: result.message || "Failed to send OTP",
         });
+        setOtpSent(0);
       }
     });
   };
@@ -183,23 +195,43 @@ const RegisterForm = ({ setMode }: { setMode: setModeFunction }) => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     dispatch({ type: "SET_ERROR", payload: null });
-    if (!phone) {
-      dispatch({ type: "SET_ERROR", payload: "Please fill in all fields" });
-      return;
-    }
-    if (otp.length < 5) {
-      dispatch({ type: "SET_ERROR", payload: "OTP is too short" });
-      return;
-    }
 
-    if (!pinMode) {
+    if (!passwordMode && !pinMode) {
+      if (!phone) {
+        dispatch({ type: "SET_ERROR", payload: "Please fill in all fields" });
+        return;
+      }
+      if (otp.length < 5) {
+        dispatch({ type: "SET_ERROR", payload: "OTP is too short" });
+        return;
+      }
       register(otp).then((result) => {
         if (result.success) {
-          dispatch({ type: "SET_PIN_MODE", payload: true });
+          if (result.status === "password_required") {
+            dispatch({ type: "SET_PASSWORD_MODE", payload: true });
+          } else {
+            dispatch({ type: "SET_PIN_MODE", payload: true });
+          }
         } else {
           dispatch({
             type: "SET_ERROR",
             payload: result.message || "Registration failed",
+          });
+        }
+      });
+    } else if (passwordMode) {
+      if (!password) {
+        dispatch({ type: "SET_ERROR", payload: "Please enter your 2FA password" });
+        return;
+      }
+      login2fa(password).then((result) => {
+        if (result.success) {
+          dispatch({ type: "SET_PASSWORD_MODE", payload: false });
+          dispatch({ type: "SET_PIN_MODE", payload: true });
+        } else {
+          dispatch({
+            type: "SET_ERROR",
+            payload: result.message || "2FA verification failed",
           });
         }
       });
@@ -220,6 +252,7 @@ const RegisterForm = ({ setMode }: { setMode: setModeFunction }) => {
       });
     }
   };
+
   return (
     <Form onSubmit={handleSubmit}>
       <Card.Content>
@@ -229,7 +262,7 @@ const RegisterForm = ({ setMode }: { setMode: setModeFunction }) => {
           </div>
         )}
         <div className="flex flex-col gap-4">
-          {!pinMode ? (
+          {!pinMode && !passwordMode ? (
             <>
               <TextField name="phone" type="phone">
                 <Label className="ml-1">Phone</Label>
@@ -262,7 +295,7 @@ const RegisterForm = ({ setMode }: { setMode: setModeFunction }) => {
                   </InputGroup.Suffix>
                 </InputGroup>
               </TextField>
-              <TextField name="pin" type="number">
+              <TextField name="otp" type="number">
                 <Label className="ml-1">OTP</Label>
                 <Description>Enter a 6-digit OTP</Description>
                 <InputOTP
@@ -277,10 +310,26 @@ const RegisterForm = ({ setMode }: { setMode: setModeFunction }) => {
                     <InputOTP.Slot index={2} />
                     <InputOTP.Slot index={3} />
                     <InputOTP.Slot index={4} />
+                    <InputOTP.Slot index={5} />
                   </InputOTP.Group>
                 </InputOTP>
               </TextField>
             </>
+          ) : passwordMode ? (
+            <TextField name="password" type="password">
+              <Label className="ml-1">2FA Cloud Password</Label>
+              <Description>This Telegram account is protected by 2-step verification. Enter your password</Description>
+              <InputGroup variant="secondary">
+                <InputGroup.Input
+                  type="password"
+                  placeholder="Enter 2FA password"
+                  value={password}
+                  onChange={(e) =>
+                    dispatch({ type: "SET_PASSWORD", payload: e.target.value })
+                  }
+                />
+              </InputGroup>
+            </TextField>
           ) : (
             <TextField name="pin" type="number">
               <Label className="ml-1">PIN</Label>
@@ -306,7 +355,7 @@ const RegisterForm = ({ setMode }: { setMode: setModeFunction }) => {
       </Card.Content>
       <Card.Footer className="mt-4 flex flex-col gap-2">
         <Button className="w-full" type="submit">
-          {!pinMode ? "Next" : "Register"}
+          {passwordMode ? "Verify Password" : !pinMode ? "Next" : "Register"}
         </Button>
         {pinMode && (
           <Button className="w-full" variant="tertiary" onClick={handleSkipPin}>

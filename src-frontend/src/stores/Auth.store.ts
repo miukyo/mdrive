@@ -32,7 +32,16 @@ type Store = {
     phone: string,
     pin: string,
   ) => Promise<{ success: boolean; message?: string }>;
-  register: (code: string) => Promise<{ success: boolean; message?: string }>;
+  register: (
+    code: string,
+  ) => Promise<{
+    success: boolean;
+    status?: "logged_in" | "password_required";
+    message?: string;
+  }>;
+  login2fa: (
+    password: string,
+  ) => Promise<{ success: boolean; message?: string }>;
   completeRegistration: () => Promise<void>;
   init: () => Promise<void>;
   logout: () => Promise<void>;
@@ -60,7 +69,7 @@ export const useAuthStore = create<Store>()((set, get) => ({
     const response = await fetch(API_BASE_URL + "/auth/send-code", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phone, pin }),
+      body: JSON.stringify({ phone, pin, mode: "login" }),
     });
     const data = await response.json();
     if (!response.ok)
@@ -109,6 +118,10 @@ export const useAuthStore = create<Store>()((set, get) => ({
     if (!response.ok)
       return { success: false, message: data.error?.message || "Login failed" };
 
+    if (data.status === "password_required") {
+      return { success: true, status: "password_required" };
+    }
+
     const meRes = await fetch(API_BASE_URL + "/auth/me", {
       headers: { "x-session-id": sessionId || "" },
     });
@@ -121,6 +134,46 @@ export const useAuthStore = create<Store>()((set, get) => ({
     };
 
     // Store in pendingUser instead of user to prevent App.tsx from redirecting
+    set({ pendingUser: newUser });
+
+    await (window as any).cookieStore?.set({
+      name: "session_id",
+      value: sessionId,
+      expires: Date.now() + 7 * 24 * 60 * 60 * 1000,
+      path: "/",
+    });
+
+    return { success: true, status: "logged_in" };
+  },
+
+  login2fa: async (password: string) => {
+    const sessionId = get().sessionId;
+    if (!sessionId) return { success: false, message: "No active session" };
+
+    const response = await fetch(API_BASE_URL + "/auth/login-2fa", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session_id: sessionId, password }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      return {
+        success: false,
+        message: data.error?.message || "2FA verification failed",
+      };
+    }
+
+    const meRes = await fetch(API_BASE_URL + "/auth/me", {
+      headers: { "x-session-id": sessionId },
+    });
+    const meData = await meRes.json();
+
+    const newUser = {
+      username: meData.user.username,
+      firstName: meData.user.firstName,
+      lastName: meData.user.lastName,
+    };
+
     set({ pendingUser: newUser });
 
     await (window as any).cookieStore?.set({
@@ -308,7 +361,7 @@ export const useAuthStore = create<Store>()((set, get) => ({
     const response = await fetch(API_BASE_URL + "/auth/send-code", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phone }),
+      body: JSON.stringify({ phone, mode: "register" }),
     });
     const data = await response.json();
     if (!response.ok)
