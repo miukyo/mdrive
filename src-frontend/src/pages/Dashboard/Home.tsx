@@ -80,7 +80,7 @@ export default function Home() {
     <div className="flex-1 overflow-auto animate-in fade-in slide-in-from-bottom-4 duration-500 pb-4">
       <div className="flex flex-col gap-1">
         <h1 className="text-3xl font-semibold tracking-tight">
-          Welcome back, {user.username}!
+          Welcome back, {user.firstName}!
         </h1>
         <p className="text-muted text-sm font-medium">
           Here's what's happening with your drive today.

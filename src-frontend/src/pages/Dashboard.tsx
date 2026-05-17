@@ -69,14 +69,14 @@ export default function Dashboard() {
   };
 
   useEffect(() => {
-    if (!user?.username) {
+    if (!user?.firstName) {
       navigate("~/");
       return;
     }
     initProgress();
-  }, [user?.username, navigate, initProgress]);
+  }, [user?.firstName, navigate, initProgress]);
 
-  if (!user?.username) {
+  if (!user?.firstName) {
     return null;
   }
 
@@ -171,9 +171,11 @@ export default function Dashboard() {
                       {user?.firstName?.charAt(0)}
                     </Avatar.Fallback>
                   </Avatar>
-                  <div className="flex flex-col hidden xl:flex">
+                  <div className="flex-col hidden xl:flex">
                     <Label>{user?.firstName}</Label>
-                    <Description>@{user.username}</Description>
+                    <Description>
+                      {user.username ? `@${user.username}` : ""}
+                    </Description>
                   </div>
                 </Button>
                 <Dropdown.Popover placement="top right">
@@ -241,7 +243,9 @@ export default function Dashboard() {
                                 <div className="flex flex-col">
                                   <Label>{session.user.firstName}</Label>
                                   <Description className="text-tiny">
-                                    @{session.user.username}
+                                    {session.user.username
+                                      ? `@${session.user.username}`
+                                      : ""}
                                   </Description>
                                 </div>
                               </div>
