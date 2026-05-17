@@ -27,7 +27,7 @@ function App() {
 
     if (isInitialLoading) return;
 
-    if (user.username) {
+    if (user.firstName) {
       if (location === "/auth" || location === "/") {
         navigate("/drive");
       }
@@ -36,7 +36,7 @@ function App() {
         navigate("/auth");
       }
     }
-  }, [user.username, navigate, location, isInitialLoading]);
+  }, [user.firstName, navigate, location, isInitialLoading]);
 
   if (isInitialLoading) {
     return (
